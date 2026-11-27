@@ -351,11 +351,13 @@
               : '<button type="button" class="btn btn-primary btn-sm" data-action="follow" data-uid="' + U.escapeHtml(u.uid) + '">Follow back</button>';
           }
 
+          var isOffAdmin = U.isOfficialAdminUser(u);
           return (
             '<div class="user-row">' +
             '<a href="#profile?uid=' + encodeURIComponent(u.uid) + '" class="user-row-left">' +
-            U.renderAvatarHtml({ name: u.name, avatarUrl: u.avatarUrl, avatarColor: u.avatarColor, size: "md" }) +
-            '<div class="user-row-meta"><span class="user-row-name">' + U.escapeHtml(u.name) + "</span>" +
+            U.renderAvatarHtml({ name: u.name, avatarUrl: u.avatarUrl, avatarColor: u.avatarColor, size: "md", isAdmin: isOffAdmin }) +
+            '<div class="user-row-meta"><span class="user-row-name name-with-badge">' + U.escapeHtml(u.name) +
+            (isOffAdmin ? U.renderAdminBadgeHtml("compact") : "") + "</span>" +
             '<span class="user-row-handle">@' + U.escapeHtml(u.username) + (u.location ? " · " + U.escapeHtml(u.location) : "") + "</span></div>" +
             "</a>" +
             '<div class="user-row-actions">' + actions + "</div></div>"

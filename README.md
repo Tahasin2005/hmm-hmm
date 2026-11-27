@@ -1,136 +1,61 @@
 # HMM HMM — Connect. Share. Belong.
 
-**HMM HMM** is a standalone Bangladeshi social networking web application built strictly with **HTML5, CSS3, Vanilla JavaScript, and the official Firebase Web SDK v11.6.1 Compat CDN**.
+**HMM HMM** is a standalone Bangladeshi social networking web application built strictly with **HTML5, CSS3, Vanilla JavaScript, and the official Firebase Web SDK v11.6.1 Compat CDN** — with **zero `package.json`**, zero build tools, and zero frameworks.
 
-- **Direct Local Device Launch (`file://`)**: Just download/unzip the folder and **double-click `index.html`** — the entire application starts immediately with **zero local server, zero CORS errors, zero build tools, and zero frameworks**.
-- **cPanel Ready**: Upload the same files directly to `public_html` in cPanel and open your domain over HTTPS.
+- **Vercel Static Ready**: Deploy directly to Vercel as a pure static site (no `package.json`, no build step required).
+- **cPanel Ready**: Upload files directly to `public_html` over HTTPS.
+- **Local Device Launch (`file://`)**: Double-click **`index.html`** to run immediately on any device.
 - **Firebase Project**: `hmm-e3899` (`Hmm Hmm`)
 - **Realtime Database**: `https://hmm-e3899-default-rtdb.asia-southeast1.firebasedatabase.app`
 
 ---
 
-## Quick Start on Your Local Device (No Server Needed!)
+## Key Features
 
-1. Download or copy the project folder to your computer or phone.
-2. Double-click **`index.html`** to open it directly in Chrome, Edge, Firefox, or Safari.
-3. Everything runs automatically:
-   - **Email/Password Registration, Login & Password Reset**
-   - **Home Feed** (create/edit/delete posts, likes, comments, share, report)
-   - **Profiles** (`@username`, bio, avatar customization, online presence)
-   - **Friends & Follows** (requests, accept/reject, friends list, follow/unfollow)
-   - **Real-Time Private Chat** (Firebase Realtime Database, unread counts, read receipts)
-   - **Notifications, Explore/Search, Settings, Dark Mode & Admin Moderation**
-
-> **Note about Google Sign-In on `file://`**: Browsers and Firebase Auth restrict Google OAuth popups on `file://` URLs. Email/Password works immediately when double-clicking `index.html`; **Google Sign-In** automatically works as soon as you host the files on cPanel (HTTPS) or `localhost`.
-
----
-
-## Project Structure
-
-```text
-hmm-hmm/
-├── index.html                  # Main single entry point — double-click to launch the entire app
-├── login.html                  # Direct route forwarder -> index.html#login
-├── register.html               # Direct route forwarder -> index.html#register
-├── forgot-password.html        # Direct route forwarder -> index.html#forgot
-├── profile.html                # Direct route forwarder -> index.html#profile
-├── friends.html                # Direct route forwarder -> index.html#friends
-├── messages.html               # Direct route forwarder -> index.html#messages
-├── notifications.html          # Direct route forwarder -> index.html#notifications
-├── explore.html                # Direct route forwarder -> index.html#explore
-├── settings.html               # Direct route forwarder -> index.html#settings
-├── admin.html                  # Direct route forwarder -> index.html#admin
-├── .htaccess                   # Apache/cPanel MIME types, headers, caching & firebase/ protection
-├── css/
-│   ├── style.css               # Core design tokens (light/dark), layout & UI primitives
-│   ├── auth.css                # Auth, email verification & onboarding screens
-│   ├── feed.css                # Composer, posts, comments & dropdowns
-│   ├── profile.css             # Profile cover, stats & avatar swatches
-│   ├── chat.css                # 2-column real-time messaging layout
-│   └── responsive.css          # Desktop, tablet, iPhone & Android breakpoints
-├── js/
-│   ├── firebase.js             # Firebase Web SDK v11.6.1 compat init & hmm-e3899 config
-│   ├── utils.js                # Sanitization, validation, hash router, avatars, icons, theme, toasts, modals
-│   ├── auth.js                 # Auth actions, profile CRUD & login/register/forgot views
-│   ├── friends.js              # Friends, requests, follows services & Friends view
-│   ├── feed.js                 # Posts, likes, comments services & Home Feed view
-│   ├── profile.js              # Profile view & Edit Profile modal
-│   ├── search.js               # Explore & search view
-│   ├── chat.js                 # RTDB 1-to-1 real-time chat & read receipts view
-│   ├── notifications.js        # Notifications view
-│   ├── settings.js             # Settings view
-│   ├── admin.js                # Admin moderation console view
-│   └── app.js                  # App bootstrap, hash router, shell, presence, badges & report modal
-├── assets/
-│   ├── icons/
-│   │   ├── logo.svg
-│   │   └── favicon.svg
-│   └── images/
-│       └── og-banner.svg
-└── firebase/
-    ├── firestore.rules         # Production Cloud Firestore security rules
-    ├── database.rules.json     # Production Realtime Database security rules
-    └── firestore.indexes.json  # Composite Firestore indexes
-```
+1. **AI Bulk Moderation & Trash (Admin Controlled)**
+   - Configure a Google AI Studio API Key inside **Admin Console (`admin.html` / `#admin`)** with an instant On/Off toggle and free-tier Gemini model selector (`gemini-3.1-flash-lite`, `gemini-4-hydrogen`, `gemini-2.5-flash`, or custom model ID).
+   - Run **Scan All Posts with AI** to scan posts and comments in batches; toxic, abusive, or spam items are automatically moved into the Firestore `trash` collection.
+   - Review trashed items in the **Trash** tab to **Restore** or **Permanently Delete** them.
+2. **Dynamic Branding & SEO Controls**
+   - Upload or link a custom Website Logo & Favicon and edit Site Name, Tagline, Meta Description, and Meta Keywords in Admin Console (`siteConfig/general`), applied live across all pages.
+3. **Distinguished Official Admin Profile**
+   - Verified executive Official Admin badge, gold-emerald avatar ring, and Official Administrator profile banner across profiles, posts, comments, search, and navigation.
+4. **Facebook-Style 7 Reactions & Post Sharing**
+   - React with **Like, Love, Care, Haha, Wow, Sad, Angry** on both posts and comments, inspect who reacted by reaction type, and share posts via direct link (`#feed?post=<id>`), native share sheet, or Quote to Feed.
+5. **Smart Link Previews**
+   - Automatically detects and renders inline previews for direct images (with lightbox), HTML5 videos, YouTube (click-to-play embed), Vimeo, and rich OpenGraph web cards.
+6. **Real-Time Text-Only Messenger (1-to-1 & Group Chat)**
+   - Instant Firebase Realtime Database messaging with online presence, unread counters, read receipts, and full **Group Chat** creation (custom name, avatar, multi-friend picker, member list). Strictly text-only.
+7. **100% Responsive Mobile & Desktop UI**
+   - Slide-in **Mobile Navigation Drawer** with search, profile, full menu, dark mode, and sign out; responsive mobile card-transformed Admin Panel tables; zero horizontal overflow.
 
 ---
 
-## 1. Firebase Setup
+## Publishing Required Firebase Security Rules
 
-This application is pre-configured for Firebase project **`hmm-e3899`** inside `js/firebase.js` using official Firebase Web SDK v11.6.1 compat scripts from `https://www.gstatic.com/firebasejs/11.6.1/`.
+Before using the new features in production, publish both updated rules files in **Firebase Console (`hmm-e3899`)**:
 
-- **Never** use Android `google-services.json` for web applications.
-- Only Firebase Web App configuration is used in `js/firebase.js`.
-
----
-
-## 2. Authentication Setup
-
-In **Firebase Console → Project `hmm-e3899` → Authentication**:
-
-1. Open **Sign-in method** and ensure both providers are **Enabled**:
-   - **Email/Password**
-   - **Google** (select a Project support email)
-2. Open **Settings → Authorized domains** and click **Add domain**:
-   - Add your cPanel domain (for example, `yourdomain.com` and `www.yourdomain.com`).
-   - Google Sign-In and email verification links work automatically on authorized HTTPS domains.
-
-> **Important Security Note**: Production Firestore rules require verified emails (`email_verified == true`) before creating profiles, posts, or social actions. Google accounts are automatically verified; Email/Password registrations automatically send a verification email and guide the user through the built-in verification screen.
+1. **Cloud Firestore Rules**: Copy **`firebase/firestore.rules`** into **Firebase Console → Firestore Database (`ai-studio-1db84c66-9714-4593-92c0-e74c85edc7e4`) → Rules** and click **Publish**.
+   - Enables `siteConfig/general`, admin-only `adminConfig/aiModeration` and `trash`, 7-reaction `likes` and `commentReactions`, and Official Admin `role`.
+2. **Realtime Database Rules**: Copy **`firebase/database.rules.json`** into **Firebase Console → Realtime Database → Rules** and click **Publish**.
+   - Enables real-time 1-to-1 and **Group Chat** (`grp_*`) threads with text-only validation and reliable unread counters.
 
 ---
 
-## 3. Cloud Firestore & Realtime Database Setup
+## Deployment
 
-- **Cloud Firestore Named Database**: `js/firebase.js` connects to `FIRESTORE_DATABASE_ID = "ai-studio-1db84c66-9714-4593-92c0-e74c85edc7e4"` (where HMM HMM's production rules are deployed). To switch to `(default)`, update `FIRESTORE_DATABASE_ID` in `js/firebase.js` and publish `firebase/firestore.rules` there.
-- **Realtime Database URL**: `https://hmm-e3899-default-rtdb.asia-southeast1.firebasedatabase.app`. Publish `firebase/database.rules.json` in **Firebase Console → Realtime Database → Rules**.
+### Vercel (Static)
+1. Import the project folder/repository in Vercel.
+2. Leave **Framework Preset** as `Other`, **Build Command** empty, and **Output Directory** as `.`.
+3. Add your Vercel domain under **Firebase Console → Authentication → Settings → Authorized domains**.
 
----
-
-## 4. cPanel Upload Instructions
-
-No build command or Node.js setup is required:
-
-1. ZIP `index.html`, the other `.html` files, `.htaccess`, `css/`, `js/`, and `assets/`.
-2. Open **cPanel → File Manager → `public_html`** (or any subfolder).
-3. Upload and **Extract** the ZIP file.
-4. Enable **SSL / HTTPS** (cPanel → **SSL/TLS Status → Run AutoSSL**).
-5. Add your domain under **Firebase Console → Authentication → Settings → Authorized domains**.
-6. Visit `https://yourdomain.com`.
+### cPanel / Local
+- **cPanel**: Upload `index.html`, the redirect `.html` files, `.htaccess`, `css/`, `js/`, and `assets/` into `public_html`, enable AutoSSL, and authorize your domain in Firebase Authentication.
+- **Local (`file://`)**: Double-click `index.html` (Email/Password works locally; Google Sign-In works over HTTPS).
 
 ---
 
-## 5. Admin Setup
+## Admin Access
 
 - **Primary Admin**: `tahasinahammed58@gmail.com` (bootstrapped in `firebase/firestore.rules` and `js/utils.js`).
-- **Additional Admins**: In Firestore, create `admins/{target_user_uid}` with `{ role: "admin" }`. Client writes to `admins` are blocked by rules.
-
----
-
-## 6. Troubleshooting
-
-| Symptom | Cause & Fix |
-| --- | --- |
-| **Google Sign-In shows a `file://` notice when opened locally** | Browsers block Firebase OAuth popups on `file://`. Use Email/Password locally, or open via cPanel HTTPS / `localhost` for Google Sign-In. |
-| **Google Sign-In fails with `auth/unauthorized-domain` on cPanel** | Add your cPanel domain in Firebase Console → Authentication → Settings → Authorized domains. |
-| **Action blocked by security rules / `permission-denied`** | Ensure the user verified their email address, and verify `firebase/firestore.rules` is published to the database specified in `FIRESTORE_DATABASE_ID`. |
-| **Chat messages do not load or send** | Publish `firebase/database.rules.json` in Firebase Console → Realtime Database → Rules. |
+- **Additional Admins**: Add `admins/{uid}` with `{ role: "admin" }` in Firestore Console.

@@ -2,7 +2,7 @@
  * HMM HMM — Firebase Web SDK Initialization (Classic Script — Works on file:// & HTTPS)
  *
  * Uses official Firebase Web SDK v11.6.1 Compat CDN scripts loaded in index.html.
- * Works directly when double-clicking index.html on a local device AND on cPanel hosting.
+ * Works directly when double-clicking index.html locally, on Vercel static deploy, and on cPanel.
  *
  * Project: Hmm Hmm (hmm-e3899)
  * Realtime Database: https://hmm-e3899-default-rtdb.asia-southeast1.firebasedatabase.app
@@ -13,8 +13,6 @@
   var REALTIME_DATABASE_URL =
     "https://hmm-e3899-default-rtdb.asia-southeast1.firebasedatabase.app";
 
-  // Named Firestore database provisioned for HMM HMM.
-  // Change to "(default)" if you switch to the default Firestore database in Firebase Console.
   var FIRESTORE_DATABASE_ID =
     "ai-studio-1db84c66-9714-4593-92c0-e74c85edc7e4";
 
@@ -43,11 +41,8 @@
   var auth = window.firebase.auth(app);
   try {
     auth.setPersistence(window.firebase.auth.Auth.Persistence.LOCAL).catch(function () {});
-  } catch (e) {
-    // Fallback if storage is restricted on file://
-  }
+  } catch (e) {}
 
-  // Connect Cloud Firestore to the provisioned named database ID (or default if "(default)")
   var db = window.firebase.firestore(app);
   if (FIRESTORE_DATABASE_ID && FIRESTORE_DATABASE_ID !== "(default)") {
     try {
@@ -82,5 +77,8 @@
   };
   HMM.rtdbServerTimestamp = function () {
     return window.firebase.database.ServerValue.TIMESTAMP;
+  };
+  HMM.rtdbIncrement = function (n) {
+    return window.firebase.database.ServerValue.increment(n);
   };
 })(window.HMM = window.HMM || {});

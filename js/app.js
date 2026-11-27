@@ -1,7 +1,8 @@
 /**
- * HMM HMM — Main Application Bootstrap, Hash Router, Shell, Presence, Badges & Report Modal
- * Classic script — works automatically when double-clicking index.html locally (file://)
- * AND when hosted on cPanel (HTTPS) or preview server.
+ * HMM HMM — Main Application Bootstrap, Hash Router, Shell, Mobile Navigation Drawer,
+ * Dynamic Site Config Sync, Presence, Badges & Report Modal
+ * Classic script — works automatically on Vercel static deploy, cPanel (HTTPS),
+ * AND when double-clicking index.html locally (file://).
  */
 (function (HMM) {
   "use strict";
@@ -69,7 +70,7 @@
       .onSnapshot(
         function (snap) {
           var unread = snap.docs.filter(function (d) { return !d.data().isRead; }).length;
-          updateBadges(["badge-notifs", "hdr-badge-notifs"], unread);
+          updateBadges(["badge-notifs", "hdr-badge-notifs", "drawer-badge-notifs"], unread);
         },
         function () {}
       );
@@ -81,7 +82,7 @@
       .onSnapshot(
         function (snap) {
           var pending = snap.docs.filter(function (d) { return d.data().status === "pending"; }).length;
-          updateBadges(["badge-friends", "mob-badge-friends"], pending);
+          updateBadges(["badge-friends", "mob-badge-friends", "drawer-badge-friends"], pending);
         },
         function () {}
       );
@@ -95,9 +96,9 @@
           if (item && typeof item.unreadCount === "number") total += item.unreadCount;
         });
       }
-      updateBadges(["badge-messages", "hdr-badge-messages", "mob-badge-messages"], total);
+      updateBadges(["badge-messages", "hdr-badge-messages", "mob-badge-messages", "drawer-badge-messages"], total);
     };
-    chatRef.on("value", chatCb);
+    chatRef.on("value", chatCb, function () {});
 
     return function () {
       if (u1) u1();
@@ -106,7 +107,28 @@
     };
   }
 
+  function closeMobileDrawer() {
+    var drawer = document.getElementById("mobile-nav-drawer");
+    var backdrop = document.getElementById("mobile-drawer-backdrop");
+    var toggleBtn = document.getElementById("mobile-drawer-toggle");
+    if (drawer) drawer.classList.remove("open");
+    if (backdrop) backdrop.classList.remove("open");
+    if (toggleBtn) toggleBtn.setAttribute("aria-expanded", "false");
+    document.body.classList.remove("drawer-open");
+  }
+
+  function openMobileDrawer() {
+    var drawer = document.getElementById("mobile-nav-drawer");
+    var backdrop = document.getElementById("mobile-drawer-backdrop");
+    var toggleBtn = document.getElementById("mobile-drawer-toggle");
+    if (drawer) drawer.classList.add("open");
+    if (backdrop) backdrop.classList.add("open");
+    if (toggleBtn) toggleBtn.setAttribute("aria-expanded", "true");
+    document.body.classList.add("drawer-open");
+  }
+
   function openReportModal(opts) {
+    var cfg = HMM.siteConfig.get();
     var optionsHtml = U.REPORT_REASONS.map(function (r) {
       return '<option value="' + U.escapeHtml(r) + '">' + U.escapeHtml(r) + "</option>";
     }).join("");
@@ -114,7 +136,7 @@
     U.openModal(
       "Report " + opts.targetType,
       '<p class="text-muted" style="font-size:13.5px;margin-bottom:14px;">' +
-        "Help keep HMM HMM safe. Tell our moderation team why you are reporting " +
+        "Help keep " + U.escapeHtml(cfg.siteName) + " safe. Tell our moderation team why you are reporting " +
         U.escapeHtml(opts.label || "this item") + ".</p>" +
         '<form id="report-modal-form" class="auth-form">' +
         '<div class="form-group"><label class="form-label" for="report-reason">Reason</label>' +
@@ -153,7 +175,7 @@
               createdAt: HMM.serverTimestamp(),
               updatedAt: HMM.serverTimestamp(),
             });
-            U.showToast("Report submitted to HMM HMM moderation.", "success");
+            U.showToast("Report submitted to moderation.", "success");
             close();
           } catch (err) {
             U.showToast(U.getFriendlyErrorMessage(err), "error");
@@ -166,13 +188,14 @@
   }
 
   function renderVerificationGate(root, user) {
+    var cfg = HMM.siteConfig.get();
     root.innerHTML =
       '<div class="gate-page"><div class="gate-card">' +
       '<div class="gate-icon">' + U.ICONS.mail + "</div>" +
       "<h2>Verify your email</h2>" +
       '<p class="text-muted" style="margin-top:8px;font-size:14px;">' +
       "We sent a verification link to <strong>" + U.escapeHtml(user.email || "") + "</strong>. " +
-      "Verify your email address to activate your HMM HMM account.</p>" +
+      "Verify your email address to activate your " + U.escapeHtml(cfg.siteName) + " account.</p>" +
       '<div id="gate-alert" class="alert alert-info hidden" style="margin-top:14px;"></div>' +
       '<div class="gate-actions">' +
       '<button type="button" class="btn btn-primary btn-lg btn-block" id="btn-check-verified">I\'ve verified my email — Continue</button>' +
@@ -223,6 +246,7 @@
   }
 
   function renderOnboardingGate(root, user) {
+    var cfg = HMM.siteConfig.get();
     var pending = A.readPendingSignup();
     var suggestedName = (pending && pending.name) || user.displayName || "HMM Member";
     var suggestedUser = (pending && pending.username) || A.generateDefaultUsername(suggestedName, user.uid);
@@ -231,8 +255,9 @@
     root.innerHTML =
       '<div class="gate-page"><div class="gate-card">' +
       '<div style="display:flex;align-items:center;gap:10px;margin-bottom:16px;">' +
-      '<img src="assets/icons/logo.svg" alt="HMM HMM" style="width:40px;height:40px;border-radius:10px;" />' +
-      '<div><div class="brand-name">HMM HMM</div><div class="brand-tagline">Connect. Share. Belong.</div></div></div>' +
+      '<img src="' + U.escapeHtml(cfg.logoUrl) + '" alt="' + U.escapeHtml(cfg.siteName) + '" data-site-logo style="width:40px;height:40px;border-radius:10px;object-fit:cover;" />' +
+      '<div><div class="brand-name" data-site-name>' + U.escapeHtml(cfg.siteName) + '</div>' +
+      '<div class="brand-tagline" data-site-tagline>' + U.escapeHtml(cfg.tagline) + "</div></div></div>" +
       "<h2>Complete your profile</h2>" +
       '<p class="text-muted" style="margin-top:6px;margin-bottom:18px;font-size:14px;">Choose your unique @username so friends can find and connect with you.</p>' +
       '<div id="onboard-error" class="alert alert-danger hidden" style="margin-bottom:14px;"></div>' +
@@ -245,8 +270,8 @@
       '<div class="form-group"><label class="form-label" for="ob-location">City / Location</label>' +
       '<input id="ob-location" class="form-input" type="text" maxlength="' + U.LIMITS.LOCATION_MAX + '" value="' + U.escapeHtml(suggestedLocation) + '" placeholder="Dhaka, Bangladesh" /></div>' +
       '<div class="form-group"><label class="form-label" for="ob-bio">Short bio (optional)</label>' +
-      '<textarea id="ob-bio" class="form-textarea" maxlength="' + U.LIMITS.BIO_MAX + '" placeholder="Say hello to the HMM HMM community..."></textarea></div>' +
-      '<button type="submit" id="ob-submit" class="btn btn-primary btn-lg btn-block">Start using HMM HMM</button>' +
+      '<textarea id="ob-bio" class="form-textarea" maxlength="' + U.LIMITS.BIO_MAX + '" placeholder="Say hello to the community..."></textarea></div>' +
+      '<button type="submit" id="ob-submit" class="btn btn-primary btn-lg btn-block">Start using ' + U.escapeHtml(cfg.siteName) + "</button>" +
       '<button type="button" id="ob-logout" class="btn btn-ghost btn-block">Sign out</button></form></div></div>';
 
     var uInput = document.getElementById("ob-username");
@@ -299,7 +324,7 @@
         errEl.textContent = U.getFriendlyErrorMessage(err);
         errEl.classList.remove("hidden");
         btn.disabled = false;
-        btn.textContent = "Start using HMM HMM";
+        btn.textContent = "Start using " + cfg.siteName;
       }
     });
   }
@@ -309,7 +334,7 @@
       '<div class="gate-page"><div class="gate-card">' +
       '<div class="gate-icon" style="background:var(--crimson-soft);color:var(--crimson);">' + U.ICONS.shield + "</div>" +
       "<h2>Account suspended</h2>" +
-      '<p class="text-muted" style="margin-top:8px;font-size:14px;">Your account (@' + U.escapeHtml(profile.username) + ") has been temporarily suspended by HMM HMM moderation.</p>" +
+      '<p class="text-muted" style="margin-top:8px;font-size:14px;">Your account (@' + U.escapeHtml(profile.username) + ") has been temporarily suspended by moderation.</p>" +
       '<div class="gate-actions"><button type="button" class="btn btn-secondary btn-block" id="btn-suspended-logout">Sign out</button></div></div></div>';
     document.getElementById("btn-suspended-logout").addEventListener("click", function () { A.logoutUser(); });
   }
@@ -317,14 +342,16 @@
   function renderShell(root, session) {
     var profile = session.profile;
     var isAdmin = session.isAdmin;
+    var isOfficialAdmin = isAdmin || U.isOfficialAdminUser(profile);
     var isDark = U.getCurrentTheme() === "dark";
+    var cfg = HMM.siteConfig.get();
 
     var navItems = [
       { id: "feed", label: "Home Feed", href: "#feed", icon: U.ICONS.home },
       { id: "explore", label: "Explore", href: "#explore", icon: U.ICONS.compass },
-      { id: "friends", label: "Friends", href: "#friends", icon: U.ICONS.users, badgeId: "badge-friends" },
-      { id: "messages", label: "Messages", href: "#messages", icon: U.ICONS.message, badgeId: "badge-messages" },
-      { id: "notifications", label: "Notifications", href: "#notifications", icon: U.ICONS.bell, badgeId: "badge-notifs" },
+      { id: "friends", label: "Friends", href: "#friends", icon: U.ICONS.users, badgeId: "badge-friends", drawerBadgeId: "drawer-badge-friends" },
+      { id: "messages", label: "Messages", href: "#messages", icon: U.ICONS.message, badgeId: "badge-messages", drawerBadgeId: "drawer-badge-messages" },
+      { id: "notifications", label: "Notifications", href: "#notifications", icon: U.ICONS.bell, badgeId: "badge-notifs", drawerBadgeId: "drawer-badge-notifs" },
       { id: "profile", label: "My Profile", href: "#profile", icon: U.ICONS.user },
       { id: "settings", label: "Settings", href: "#settings", icon: U.ICONS.settings },
     ];
@@ -343,26 +370,71 @@
       })
       .join("");
 
+    var drawerNavHtml = navItems
+      .map(function (item) {
+        return (
+          '<a href="' + item.href + '" class="nav-link" data-nav="' + item.id + '">' +
+          item.icon + "<span>" + item.label + "</span>" +
+          (item.drawerBadgeId ? '<span id="' + item.drawerBadgeId + '" class="nav-link-badge hidden">0</span>' : "") +
+          "</a>"
+        );
+      })
+      .join("");
+
+    var adminBadge = isOfficialAdmin ? U.renderAdminBadgeHtml("compact") : "";
+
     root.innerHTML =
       '<header class="app-header"><div class="header-inner">' +
-      '<a href="#feed" class="brand-link"><img src="assets/icons/logo.svg" alt="HMM HMM" class="brand-mark" />' +
-      '<span class="brand-text"><span class="brand-name">HMM HMM</span><span class="brand-tagline">Connect. Share. Belong.</span></span></a>' +
+      '<div class="header-left-group">' +
+      '<button type="button" id="mobile-drawer-toggle" class="icon-btn mobile-menu-btn" aria-label="Open navigation menu" aria-expanded="false" aria-controls="mobile-nav-drawer">' +
+      U.ICONS.menu + "</button>" +
+      '<a href="#feed" class="brand-link">' +
+      '<img src="' + U.escapeHtml(cfg.logoUrl) + '" alt="' + U.escapeHtml(cfg.siteName) + '" class="brand-mark" data-site-logo />' +
+      '<span class="brand-text"><span class="brand-name" data-site-name>' + U.escapeHtml(cfg.siteName) + "</span>" +
+      '<span class="brand-tagline" data-site-tagline>' + U.escapeHtml(cfg.tagline) + "</span></span></a>" +
+      "</div>" +
       '<form id="global-search-form" class="header-search" role="search">' +
       '<span class="header-search-icon">' + U.ICONS.search + "</span>" +
-      '<input id="global-search-input" type="search" placeholder="Search people, @usernames..." aria-label="Search HMM HMM" /></form>' +
+      '<input id="global-search-input" type="search" placeholder="Search people, @usernames..." aria-label="Search people" /></form>' +
       '<div class="header-actions">' +
       '<button type="button" id="theme-toggle-btn" class="icon-btn" title="Toggle dark mode" aria-label="Toggle dark mode">' + (isDark ? U.ICONS.sun : U.ICONS.moon) + "</button>" +
       '<a href="#messages" class="icon-btn" data-hdr-nav="messages" title="Messages" aria-label="Messages">' + U.ICONS.message + '<span id="hdr-badge-messages" class="badge-dot hidden">0</span></a>' +
       '<a href="#notifications" class="icon-btn" data-hdr-nav="notifications" title="Notifications" aria-label="Notifications">' + U.ICONS.bell + '<span id="hdr-badge-notifs" class="badge-dot hidden">0</span></a>' +
       '<a href="#profile" class="header-user-btn" title="My profile" id="hdr-user-link">' +
-      U.renderAvatarHtml({ name: profile.name, avatarUrl: profile.avatarUrl, avatarColor: profile.avatarColor, size: "xs" }) +
-      '<span class="header-user-name" id="hdr-profile-name">' + U.escapeHtml(profile.name) + "</span></a>" +
+      U.renderAvatarHtml({ name: profile.name, avatarUrl: profile.avatarUrl, avatarColor: profile.avatarColor, size: "xs", isAdmin: isOfficialAdmin }) +
+      '<span class="header-user-name" id="hdr-profile-name">' + U.escapeHtml(profile.name) + "</span>" +
+      (isOfficialAdmin ? '<span class="header-user-admin-badge">' + adminBadge + "</span>" : "") +
+      "</a>" +
       "</div></div></header>" +
+
+      // Mobile Navigation Drawer + Backdrop
+      '<div id="mobile-drawer-backdrop" class="mobile-drawer-backdrop" aria-hidden="true"></div>' +
+      '<aside id="mobile-nav-drawer" class="mobile-nav-drawer" aria-label="Navigation menu">' +
+      '<div class="mobile-drawer-head">' +
+      '<a href="#feed" class="brand-link">' +
+      '<img src="' + U.escapeHtml(cfg.logoUrl) + '" alt="' + U.escapeHtml(cfg.siteName) + '" class="brand-mark" data-site-logo />' +
+      '<span class="brand-text"><span class="brand-name" data-site-name>' + U.escapeHtml(cfg.siteName) + "</span></span></a>" +
+      '<button type="button" id="mobile-drawer-close" class="icon-btn" aria-label="Close navigation menu">' + U.ICONS.close + "</button>" +
+      "</div>" +
+      '<form id="drawer-search-form" class="mobile-drawer-search" role="search">' +
+      '<span class="header-search-icon">' + U.ICONS.search + "</span>" +
+      '<input id="drawer-search-input" type="search" placeholder="Search people, @usernames..." aria-label="Search" /></form>' +
+      '<a href="#profile" class="sidebar-profile-mini" id="drawer-profile-card">' +
+      U.renderAvatarHtml({ name: profile.name, avatarUrl: profile.avatarUrl, avatarColor: profile.avatarColor, size: "md", online: true, isAdmin: isOfficialAdmin }) +
+      '<div class="sidebar-profile-info"><strong class="name-with-badge"><span id="drawer-profile-name">' + U.escapeHtml(profile.name) + "</span>" + adminBadge + "</strong>" +
+      '<span id="drawer-profile-handle">@' + U.escapeHtml(profile.username) + "</span></div></a>" +
+      '<nav class="mobile-drawer-nav"><div class="nav-list">' + drawerNavHtml + "</div></nav>" +
+      '<div class="mobile-drawer-footer">' +
+      '<button type="button" id="drawer-theme-btn" class="btn btn-secondary btn-block">' + (isDark ? U.ICONS.sun : U.ICONS.moon) +
+      '<span id="drawer-theme-label">' + (isDark ? "Switch to Light Mode" : "Switch to Dark Mode") + "</span></button>" +
+      '<button type="button" id="drawer-logout-btn" class="sidebar-logout-btn">' + U.ICONS.logout + "<span>Sign out</span></button>" +
+      "</div></aside>" +
+
       '<div class="app-shell" id="hmm-app-shell">' +
       '<aside class="left-sidebar">' +
       '<a href="#profile" class="sidebar-profile-mini" id="sidebar-profile-card">' +
-      U.renderAvatarHtml({ name: profile.name, avatarUrl: profile.avatarUrl, avatarColor: profile.avatarColor, size: "md", online: true }) +
-      '<div class="sidebar-profile-info"><strong id="sidebar-profile-name">' + U.escapeHtml(profile.name) + "</strong>" +
+      U.renderAvatarHtml({ name: profile.name, avatarUrl: profile.avatarUrl, avatarColor: profile.avatarColor, size: "md", online: true, isAdmin: isOfficialAdmin }) +
+      '<div class="sidebar-profile-info"><strong class="name-with-badge"><span id="sidebar-profile-name">' + U.escapeHtml(profile.name) + "</span>" + adminBadge + "</strong>" +
       '<span id="sidebar-profile-handle">@' + U.escapeHtml(profile.username) + "</span></div></a>" +
       '<nav class="nav-card" aria-label="Main navigation"><div class="nav-list">' + leftNavHtml + "</div>" +
       '<hr style="border:none;border-top:1px solid var(--border);margin:8px 0;" />' +
@@ -379,19 +451,63 @@
       '<a href="#profile" class="mobile-nav-item" data-mob-nav="profile">' + U.ICONS.user + "<span>Profile</span></a>" +
       "</nav>";
 
+    function syncThemeButtons(theme) {
+      var darkNow = theme === "dark";
+      var hdrBtn = document.getElementById("theme-toggle-btn");
+      if (hdrBtn) hdrBtn.innerHTML = darkNow ? U.ICONS.sun : U.ICONS.moon;
+      var drBtn = document.getElementById("drawer-theme-btn");
+      if (drBtn) {
+        drBtn.innerHTML =
+          (darkNow ? U.ICONS.sun : U.ICONS.moon) +
+          '<span id="drawer-theme-label">' + (darkNow ? "Switch to Light Mode" : "Switch to Dark Mode") + "</span>";
+      }
+    }
+
     document.getElementById("global-search-form").addEventListener("submit", function (e) {
       e.preventDefault();
       var q = (document.getElementById("global-search-input").value || "").trim();
       U.navigateTo("explore", q ? { q: q } : null);
     });
 
-    document.getElementById("theme-toggle-btn").addEventListener("click", function (e) {
-      var next = U.toggleTheme();
-      e.currentTarget.innerHTML = next === "dark" ? U.ICONS.sun : U.ICONS.moon;
+    document.getElementById("drawer-search-form").addEventListener("submit", function (e) {
+      e.preventDefault();
+      var q = (document.getElementById("drawer-search-input").value || "").trim();
+      closeMobileDrawer();
+      U.navigateTo("explore", q ? { q: q } : null);
+    });
+
+    document.getElementById("theme-toggle-btn").addEventListener("click", function () {
+      syncThemeButtons(U.toggleTheme());
+    });
+
+    document.getElementById("drawer-theme-btn").addEventListener("click", function () {
+      syncThemeButtons(U.toggleTheme());
     });
 
     document.getElementById("sidebar-logout-btn").addEventListener("click", function () {
       A.logoutUser();
+    });
+
+    document.getElementById("drawer-logout-btn").addEventListener("click", function () {
+      closeMobileDrawer();
+      A.logoutUser();
+    });
+
+    // Mobile drawer wiring
+    document.getElementById("mobile-drawer-toggle").addEventListener("click", openMobileDrawer);
+    document.getElementById("mobile-drawer-close").addEventListener("click", closeMobileDrawer);
+    document.getElementById("mobile-drawer-backdrop").addEventListener("click", closeMobileDrawer);
+    document.getElementById("mobile-nav-drawer").addEventListener("click", function (e) {
+      if (e.target.closest("a[href]")) closeMobileDrawer();
+    });
+
+    var escHandler = function (e) {
+      if (e.key === "Escape") closeMobileDrawer();
+    };
+    document.addEventListener("keydown", escHandler);
+    globalCleanups.push(function () {
+      document.removeEventListener("keydown", escHandler);
+      closeMobileDrawer();
     });
 
     renderRightRailSuggestions(session);
@@ -400,16 +516,17 @@
   async function renderRightRailSuggestions(session) {
     var rail = document.getElementById("page-right-rail");
     if (!rail) return;
+    var cfg = HMM.siteConfig.get();
 
     rail.innerHTML =
-      '<div class="card"><div class="card-header"><h3 class="card-title">People on HMM HMM</h3>' +
+      '<div class="card"><div class="card-header"><h3 class="card-title">People on <span data-site-name>' + U.escapeHtml(cfg.siteName) + "</span></h3>" +
       '<a href="#explore" class="text-accent" style="font-size:13px;font-weight:600;">See all</a></div>' +
       '<div id="rail-suggested-list" class="text-muted" style="font-size:13px;">Loading people...</div></div>' +
-      '<div class="card"><h3 class="card-title" style="margin-bottom:6px;">HMM HMM</h3>' +
-      '<p class="text-muted" style="font-size:13px;line-height:1.5;">Connect. Share. Belong. A modern Bangladeshi social network powered directly by Firebase.</p>' +
-      '<div style="display:flex;gap:12px;margin-top:12px;font-size:12.5px;font-weight:600;">' +
+      '<div class="card"><h3 class="card-title" style="margin-bottom:6px;" data-site-name>' + U.escapeHtml(cfg.siteName) + "</h3>" +
+      '<p class="text-muted" style="font-size:13px;line-height:1.5;"><span data-site-tagline>' + U.escapeHtml(cfg.tagline) + "</span> A modern Bangladeshi social network powered directly by Firebase.</p>" +
+      '<div style="display:flex;gap:12px;margin-top:12px;font-size:12.5px;font-weight:600;flex-wrap:wrap;">' +
       '<a href="#settings" class="text-accent">Settings</a><a href="#explore" class="text-accent">Explore</a>' +
-      (session.isAdmin ? '<a href="#admin" class="text-accent">Moderation</a>' : "") +
+      (session.isAdmin ? '<a href="#admin" class="text-accent">Admin Console</a>' : "") +
       "</div></div>";
 
     try {
@@ -417,15 +534,17 @@
       var listEl = document.getElementById("rail-suggested-list");
       if (!listEl) return;
       if (users.length === 0) {
-        listEl.innerHTML = '<p class="text-muted" style="font-size:13px;">Invite friends to join HMM HMM!</p>';
+        listEl.innerHTML = '<p class="text-muted" style="font-size:13px;">Invite friends to join the community!</p>';
         return;
       }
       listEl.innerHTML = users
         .map(function (u) {
+          var isOffAdmin = U.isOfficialAdminUser(u);
           return (
             '<div class="user-row"><a href="#profile?uid=' + encodeURIComponent(u.uid) + '" class="user-row-left">' +
-            U.renderAvatarHtml({ name: u.name, avatarUrl: u.avatarUrl, avatarColor: u.avatarColor, size: "sm" }) +
-            '<div class="user-row-meta"><span class="user-row-name">' + U.escapeHtml(u.name) + "</span>" +
+            U.renderAvatarHtml({ name: u.name, avatarUrl: u.avatarUrl, avatarColor: u.avatarColor, size: "sm", isAdmin: isOffAdmin }) +
+            '<div class="user-row-meta"><span class="user-row-name name-with-badge">' + U.escapeHtml(u.name) +
+            (isOffAdmin ? U.renderAdminBadgeHtml("compact") : "") + "</span>" +
             '<span class="user-row-handle">@' + U.escapeHtml(u.username) + "</span></div></a>" +
             '<a href="#profile?uid=' + encodeURIComponent(u.uid) + '" class="btn btn-secondary btn-sm">View</a></div>'
           );
@@ -438,6 +557,7 @@
   }
 
   function renderActiveRoute() {
+    closeMobileDrawer();
     var root = document.getElementById("app-root");
     var parsed = U.parseRoute();
     var route = parsed.route;
@@ -464,7 +584,7 @@
     if (shell) shell.classList.toggle("wide-layout", Boolean(wideRoutes[route]));
     if (rail) rail.classList.toggle("hidden", Boolean(wideRoutes[route]));
 
-    // Update active nav highlights
+    // Update active nav highlights (desktop sidebar + mobile drawer + header + bottom nav)
     document.querySelectorAll("[data-nav]").forEach(function (el) {
       el.classList.toggle("active", el.dataset.nav === route);
     });
@@ -472,7 +592,7 @@
       el.classList.toggle("active", el.dataset.hdrNav === route);
     });
     document.querySelectorAll("[data-mob-nav]").forEach(function (el) {
-      var active = el.dataset.mobNav === route || (el.dataset.mobNav === "profile" && route === "settings");
+      var active = el.dataset.mobNav === route || (el.dataset.mobNav === "profile" && (route === "settings" || route === "admin"));
       el.classList.toggle("active", active);
     });
 
@@ -490,14 +610,17 @@
       refreshProfile: async function () {
         var fresh = await A.getUserProfile(currentSession.user.uid);
         if (fresh) {
+          if (currentSession.isAdmin && fresh.role !== "admin") fresh.role = "admin";
           currentSession.profile = fresh;
           ctx.profile = fresh;
-          var sn = document.getElementById("sidebar-profile-name");
-          var sh = document.getElementById("sidebar-profile-handle");
-          var hn = document.getElementById("hdr-profile-name");
-          if (sn) sn.textContent = fresh.name;
-          if (sh) sh.textContent = "@" + fresh.username;
-          if (hn) hn.textContent = fresh.name;
+          ["sidebar-profile-name", "drawer-profile-name", "hdr-profile-name"].forEach(function (id) {
+            var el = document.getElementById(id);
+            if (el) el.textContent = fresh.name;
+          });
+          ["sidebar-profile-handle", "drawer-profile-handle"].forEach(function (id) {
+            var el = document.getElementById(id);
+            if (el) el.textContent = "@" + fresh.username;
+          });
         }
         return currentSession.profile;
       },
@@ -529,8 +652,43 @@
         break;
       case "feed":
       default:
-        HMM.feed.mountView(ctx);
+        HMM.feed.mountView(ctx, params);
         break;
+    }
+  }
+
+  async function syncOfficialAdminIdentity(user, profile) {
+    // Tag admin user profile with role: "admin" and register primaryAdminUid in siteConfig/general
+    // so regular users recognize the official administrator across profiles, posts, comments & search.
+    try {
+      if (profile.role !== "admin") {
+        await HMM.db.collection("users").doc(user.uid).update({
+          role: "admin",
+          updatedAt: HMM.serverTimestamp(),
+        });
+        profile.role = "admin";
+      }
+    } catch (e) {}
+
+    if (user.email === U.BOOTSTRAPPED_ADMIN_EMAIL) {
+      try {
+        var cfg = HMM.siteConfig.get();
+        if (cfg.primaryAdminUid !== user.uid) {
+          await HMM.db.collection("siteConfig").doc("general").set(
+            {
+              siteName: cfg.siteName || "HMM HMM",
+              tagline: cfg.tagline || "Connect. Share. Belong.",
+              logoUrl: cfg.logoUrl || "assets/icons/logo.svg",
+              faviconUrl: cfg.faviconUrl || "assets/icons/favicon.svg",
+              metaDescription: cfg.metaDescription || HMM.siteConfig.DEFAULT.metaDescription,
+              metaKeywords: cfg.metaKeywords || HMM.siteConfig.DEFAULT.metaKeywords,
+              primaryAdminUid: user.uid,
+              updatedAt: HMM.serverTimestamp(),
+            },
+            { merge: true }
+          );
+        }
+      } catch (e) {}
     }
   }
 
@@ -575,6 +733,11 @@
       }
 
       var isAdmin = await A.checkIsAdmin(user);
+      if (isAdmin) {
+        profile.role = "admin";
+        syncOfficialAdminIdentity(user, profile);
+      }
+
       currentSession = { user: user, profile: profile, isAdmin: isAdmin };
 
       renderShell(root, currentSession);
@@ -596,6 +759,7 @@
 
   function startApp() {
     U.initTheme();
+    HMM.siteConfig.init();
     var root = document.getElementById("app-root");
 
     if (HMM.firebaseLoadError || !HMM.auth) {

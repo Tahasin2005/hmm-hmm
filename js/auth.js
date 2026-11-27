@@ -362,8 +362,9 @@
   // RENDER AUTH VIEWS DIRECTLY INSIDE index.html (Login / Register / Forgot)
   // ============================================================================
   function renderAuthView(root, mode) {
+    var cfg = HMM.siteConfig.get();
     var fileNote = U.isFileProtocol()
-      ? '<div class="alert alert-info" style="margin-bottom:14px;font-size:12.5px;">Local mode (<code>file://</code>): Email &amp; Password works directly. Google Sign-In works once hosted on HTTPS/cPanel.</div>'
+      ? '<div class="alert alert-info" style="margin-bottom:14px;font-size:12.5px;">Local mode (<code>file://</code>): Email &amp; Password works directly. Google Sign-In works once hosted on HTTPS (Vercel / cPanel).</div>'
       : "";
 
     if (mode === "forgot") {
@@ -371,8 +372,9 @@
         '<div class="gate-page">' +
         '<div class="gate-card">' +
         '<a href="#login" style="display:inline-flex;align-items:center;gap:10px;margin-bottom:20px;">' +
-        '<img src="assets/icons/logo.svg" alt="HMM HMM" style="width:40px;height:40px;border-radius:10px;" />' +
-        '<div><div class="brand-name">HMM HMM</div><div class="brand-tagline">Connect. Share. Belong.</div></div>' +
+        '<img src="' + U.escapeHtml(cfg.logoUrl) + '" alt="' + U.escapeHtml(cfg.siteName) + '" data-site-logo style="width:40px;height:40px;border-radius:10px;object-fit:cover;" />' +
+        '<div><div class="brand-name" data-site-name>' + U.escapeHtml(cfg.siteName) + '</div>' +
+        '<div class="brand-tagline" data-site-tagline>' + U.escapeHtml(cfg.tagline) + "</div></div>" +
         "</a>" +
         "<h2>Reset your password</h2>" +
         '<p class="text-muted" style="margin-top:6px;margin-bottom:20px;font-size:14px;">Enter your email address and we will send you a password reset link.</p>' +
@@ -404,7 +406,7 @@
         '<input id="reg-email" class="form-input" type="email" required autocomplete="email" placeholder="you@example.com" /></div>' +
         '<div class="form-group"><label class="form-label" for="reg-password">Password</label>' +
         '<input id="reg-password" class="form-input" type="password" required minlength="6" autocomplete="new-password" placeholder="At least 6 characters" /></div>' +
-        '<button type="submit" id="register-submit" class="btn btn-primary btn-lg btn-block">Create HMM HMM account</button>' +
+        '<button type="submit" id="register-submit" class="btn btn-primary btn-lg btn-block">Create ' + U.escapeHtml(cfg.siteName) + " account</button>" +
         "</form>"
       : '<form id="login-form" class="auth-form">' +
         '<div class="form-group"><label class="form-label" for="login-email">Email address</label>' +
@@ -418,21 +420,21 @@
     root.innerHTML =
       '<div class="auth-page">' +
       '<section class="auth-hero">' +
-      '<a href="#login" class="auth-hero-brand"><img src="assets/icons/logo.svg" alt="HMM HMM" /><span>HMM HMM</span></a>' +
+      '<a href="#login" class="auth-hero-brand"><img src="' + U.escapeHtml(cfg.logoUrl) + '" alt="' + U.escapeHtml(cfg.siteName) + '" data-site-logo style="object-fit:cover;" /><span data-site-name>' + U.escapeHtml(cfg.siteName) + "</span></a>" +
       '<div class="auth-hero-content">' +
-      "<h1>" + (isRegister ? "Claim your @username today." : "Connect. Share. Belong.") + "</h1>" +
-      "<p>Join Bangladesh's warm, modern social community. Share daily moments, make real friends, and chat in real time from any phone or computer.</p>" +
+      "<h1>" + (isRegister ? "Claim your @username today." : U.escapeHtml(cfg.tagline)) + "</h1>" +
+      "<p>Join Bangladesh's warm, modern social community. Share daily moments, react with friends, and chat in real time from any phone or computer.</p>" +
       '<div class="auth-hero-features">' +
-      '<div class="auth-feature-item"><span class="auth-feature-dot"></span><span>Real-time private 1-to-1 messaging with online presence</span></div>' +
-      '<div class="auth-feature-item"><span class="auth-feature-dot"></span><span>Friends, followers, and unique @username profiles</span></div>' +
-      '<div class="auth-feature-item"><span class="auth-feature-dot"></span><span>Community feed with likes, comments, and moderation</span></div>' +
+      '<div class="auth-feature-item"><span class="auth-feature-dot"></span><span>Real-time 1-to-1 &amp; Group Messenger with online presence</span></div>' +
+      '<div class="auth-feature-item"><span class="auth-feature-dot"></span><span>Expressive reactions, smart media previews &amp; post sharing</span></div>' +
+      '<div class="auth-feature-item"><span class="auth-feature-dot"></span><span>Friends, followers, unique @username profiles &amp; AI safety</span></div>' +
       "</div></div>" +
-      '<div class="auth-hero-footer">HMM HMM Social Network · Built for Bangladesh &amp; beyond</div>' +
+      '<div class="auth-hero-footer"><span data-site-name>' + U.escapeHtml(cfg.siteName) + "</span> Social Network · Built for Bangladesh &amp; beyond</div>" +
       "</section>" +
       '<main class="auth-panel"><div class="auth-card">' +
-      '<div class="auth-mobile-brand"><img src="assets/icons/logo.svg" alt="HMM HMM" /><div><div class="brand-name">HMM HMM</div><div class="brand-tagline">Connect. Share. Belong.</div></div></div>' +
+      '<div class="auth-mobile-brand"><img src="' + U.escapeHtml(cfg.logoUrl) + '" alt="' + U.escapeHtml(cfg.siteName) + '" data-site-logo style="object-fit:cover;" /><div><div class="brand-name" data-site-name>' + U.escapeHtml(cfg.siteName) + '</div><div class="brand-tagline" data-site-tagline>' + U.escapeHtml(cfg.tagline) + "</div></div></div>" +
       "<h2>" + (isRegister ? "Create account" : "Welcome back") + "</h2>" +
-      '<p class="auth-subtitle">' + (isRegister ? "Join the HMM HMM community in under a minute." : "Sign in to continue to your HMM HMM feed.") + "</p>" +
+      '<p class="auth-subtitle">' + (isRegister ? "Join the " + U.escapeHtml(cfg.siteName) + " community in under a minute." : "Sign in to continue to your " + U.escapeHtml(cfg.siteName) + " feed.") + "</p>" +
       fileNote +
       '<div id="auth-error" class="alert alert-danger hidden" style="margin-bottom:14px;"></div>' +
       '<div id="auth-success" class="alert alert-info hidden" style="margin-bottom:14px;"></div>' +
@@ -442,7 +444,7 @@
       '<p class="auth-footer-links">' +
       (isRegister
         ? 'Already have an account? <a href="#login">Sign in</a>'
-        : 'New to HMM HMM? <a href="#register">Create an account</a>') +
+        : 'New to ' + U.escapeHtml(cfg.siteName) + '? <a href="#register">Create an account</a>') +
       "</p>" +
       "</div></main></div>";
 

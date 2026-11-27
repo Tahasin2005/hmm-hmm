@@ -1,6 +1,7 @@
 /**
  * HMM HMM — User Profile View Controller (#profile?uid= or #profile?u=)
- * Classic script (works directly via file:// and HTTP/HTTPS).
+ * Includes distinguished Executive Official Administrator Profile badge & styling.
+ * Classic script (works directly via file://, Vercel, and cPanel).
  */
 (function (HMM) {
   "use strict";
@@ -139,10 +140,14 @@
       var card = document.getElementById("profile-header-card");
       if (!card) return;
 
+      var isProfileAdmin = U.isOfficialAdminUser(targetProfile) || (isOwnProfile && ctx.isAdmin);
+      card.classList.toggle("profile-card-admin", isProfileAdmin);
+
       var actionsHtml = "";
       if (isOwnProfile) {
         actionsHtml =
           '<button type="button" class="btn btn-primary btn-sm" id="btn-edit-profile">' + U.ICONS.edit + " Edit profile</button>" +
+          (ctx.isAdmin ? '<a href="#admin" class="btn btn-outline btn-sm">' + U.ICONS.shield + " Admin Console</a>" : "") +
           '<a href="#settings" class="btn btn-secondary btn-sm">' + U.ICONS.settings + " Settings</a>";
       } else {
         var isFriend = socialState.friendUids.has(targetProfile.uid);
@@ -171,26 +176,42 @@
           friendBtn +
           followBtn +
           '<a href="#messages?uid=' + encodeURIComponent(targetProfile.uid) + '" class="btn btn-secondary btn-sm">' + U.ICONS.message + " Message</a>" +
-          '<button type="button" class="icon-btn" data-paction="report" title="Report user" aria-label="Report user">' + U.ICONS.flag + "</button>";
+          (!isProfileAdmin
+            ? '<button type="button" class="icon-btn" data-paction="report" title="Report user" aria-label="Report user">' + U.ICONS.flag + "</button>"
+            : "");
       }
 
+      var adminExecutiveStrip = isProfileAdmin
+        ? '<div class="admin-profile-banner">' +
+          '<div class="admin-profile-banner-icon">' + U.ICONS.shield + "</div>" +
+          '<div class="admin-profile-banner-text">' +
+          "<strong>Official " + U.escapeHtml(HMM.siteConfig.get().siteName) + " Administrator</strong>" +
+          "<span>Verified platform leadership · Community safety &amp; governance</span>" +
+          "</div></div>"
+        : "";
+
       card.innerHTML =
-        '<div class="profile-cover"></div><div class="profile-body">' +
-        '<div class="profile-top-row"><div class="profile-avatar-ring">' +
+        '<div class="profile-cover ' + (isProfileAdmin ? "profile-cover-admin" : "") + '">' +
+        (isProfileAdmin ? '<div class="profile-cover-emblem">Official Administrator</div>' : "") +
+        '</div><div class="profile-body">' +
+        '<div class="profile-top-row"><div class="profile-avatar-ring ' + (isProfileAdmin ? "profile-avatar-ring-admin" : "") + '">' +
         U.renderAvatarHtml({
           name: targetProfile.name,
           avatarUrl: targetProfile.avatarUrl,
           avatarColor: targetProfile.avatarColor,
           size: "xl",
           online: isOwnProfile ? true : presence.online,
+          isAdmin: isProfileAdmin,
         }) +
         '</div><div class="profile-actions">' + actionsHtml + "</div></div>" +
-        '<div class="profile-identity"><div class="profile-name-row"><h1>' + U.escapeHtml(targetProfile.name) + "</h1></div>" +
+        '<div class="profile-identity"><div class="profile-name-row"><h1>' + U.escapeHtml(targetProfile.name) + "</h1>" +
+        (isProfileAdmin ? U.renderAdminBadgeHtml("full") : "") + "</div>" +
         '<div class="profile-handle">@' + U.escapeHtml(targetProfile.username) + "</div>" +
         '<div class="profile-presence ' + (isOwnProfile || presence.online ? "online" : "") + '">' +
         '<span class="dot"></span><span>' +
         (isOwnProfile ? "Online" : U.escapeHtml(U.formatPresenceLabel(presence.online, presence.lastSeen))) +
         "</span></div></div>" +
+        adminExecutiveStrip +
         (targetProfile.bio ? '<p class="profile-bio">' + U.escapeHtml(targetProfile.bio) + "</p>" : "") +
         '<div class="profile-meta-row">' +
         (targetProfile.location ? '<span class="profile-meta-item">' + U.ICONS.mapPin + " " + U.escapeHtml(targetProfile.location) + "</span>" : "") +
@@ -268,8 +289,8 @@
       renderHeader();
     });
 
-    var unsubLikes = HMM.feed.subscribeToUserLikes(ctx.user.uid, function (liked) {
-      postManager.setLikedSet(liked);
+    var unsubReacts = HMM.feed.subscribeToAllPostReactions(function (byPost) {
+      postManager.setReactionsMap(byPost);
       postManager.render(
         userPosts,
         "No posts yet",
@@ -280,7 +301,7 @@
     ctx.onCleanup(function () {
       presenceRef.off("value", presenceCb);
       if (unsubSocial) unsubSocial();
-      if (unsubLikes) unsubLikes();
+      if (unsubReacts) unsubReacts();
       postManager.cleanup();
     });
 

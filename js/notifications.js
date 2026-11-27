@@ -9,7 +9,7 @@
 
   function iconForType(type) {
     switch (type) {
-      case "like": return U.ICONS.heartFilled;
+      case "like": return U.ICONS.heart;
       case "comment": return U.ICONS.comment;
       case "friend_request":
       case "friend_accepted":
@@ -21,10 +21,17 @@
 
   function linkForNotification(item) {
     switch (item.type) {
-      case "message": return "#messages?uid=" + encodeURIComponent(item.senderId);
+      case "message":
+        if (item.referenceId && String(item.referenceId).indexOf("grp_") === 0) {
+          return "#messages?chat=" + encodeURIComponent(item.referenceId);
+        }
+        return "#messages?uid=" + encodeURIComponent(item.senderId);
       case "friend_request": return "#friends";
       case "friend_accepted":
       case "follow": return "#profile?uid=" + encodeURIComponent(item.senderId);
+      case "like":
+      case "comment":
+        return item.referenceId ? "#feed?post=" + encodeURIComponent(item.referenceId) : "#feed";
       default: return "#feed";
     }
   }

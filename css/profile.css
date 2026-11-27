@@ -171,3 +171,80 @@
   border-color: var(--text);
   transform: scale(1.12);
 }
+
+/* ============================================================================
+ * OFFICIAL ADMINISTRATOR DISTINGUISHED PROFILE STYLING
+ * ============================================================================ */
+.profile-card-admin {
+  border-color: rgba(217, 119, 6, 0.42);
+  box-shadow: 0 8px 28px rgba(0, 106, 78, 0.12);
+}
+
+.profile-cover-admin {
+  background: linear-gradient(135deg, #042F2E 0%, #006A4E 48%, #92400E 100%);
+}
+
+.profile-cover-emblem {
+  position: absolute;
+  top: 14px;
+  right: 16px;
+  z-index: 2;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 12px;
+  border-radius: var(--radius-full);
+  background: rgba(11, 15, 14, 0.48);
+  border: 1px solid rgba(251, 191, 36, 0.45);
+  color: #FEF3C7;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  backdrop-filter: blur(8px);
+}
+
+.profile-avatar-ring-admin {
+  background: linear-gradient(135deg, #F59E0B, #006A4E, #FBBF24);
+  padding: 4px;
+  box-shadow: 0 4px 16px rgba(217, 119, 6, 0.35);
+}
+
+.admin-profile-banner {
+  margin-top: 14px;
+  padding: 12px 14px;
+  border-radius: var(--radius-md);
+  background: linear-gradient(135deg, rgba(0, 106, 78, 0.09) 0%, rgba(217, 119, 6, 0.1) 100%);
+  border: 1px solid rgba(217, 119, 6, 0.28);
+  display: flex;
+  align-items: flex-start;
+  gap: 11px;
+}
+
+.admin-profile-banner-icon {
+  width: 34px;
+  height: 34px;
+  border-radius: var(--radius-sm);
+  background: linear-gradient(135deg, #006A4E, #B45309);
+  color: #FFFFFF;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.admin-profile-banner-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.admin-profile-banner-text strong {
+  font-size: 13.5px;
+  color: var(--text);
+}
+
+.admin-profile-banner-text span {
+  font-size: 12.5px;
+  color: var(--text-muted);
+  line-height: 1.4;
+}

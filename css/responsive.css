@@ -1,5 +1,6 @@
 /* ============================================================================
  * HMM HMM — Responsive Breakpoints (Desktop, Tablet, iPhone, Android)
+ * Zero Horizontal Overflow + Mobile Drawer + Admin Table-to-Card Transforms
  * ============================================================================ */
 
 /* Large Tablets & Small Laptops (<= 1080px) */
@@ -30,6 +31,10 @@
     padding: 24px 20px;
   }
 
+  .mobile-menu-btn {
+    display: inline-flex;
+  }
+
   .app-shell,
   .app-shell.wide-layout {
     grid-template-columns: 1fr;
@@ -46,7 +51,8 @@
   }
 
   .brand-tagline,
-  .header-user-name {
+  .header-user-name,
+  .header-user-admin-badge {
     display: none;
   }
 
@@ -60,6 +66,10 @@
 
   .profile-stats {
     grid-template-columns: repeat(2, 1fr);
+  }
+
+  .admin-grid-2 {
+    grid-template-columns: 1fr;
   }
 
   /* Mobile Chat Master/Detail Toggle */
@@ -89,6 +99,80 @@
   }
 }
 
+/* Mobile Admin Table -> Stacked Card View (<= 760px) */
+@media (max-width: 760px) {
+  .responsive-table thead {
+    display: none;
+  }
+
+  .responsive-table,
+  .responsive-table tbody,
+  .responsive-table tr,
+  .responsive-table td {
+    display: block;
+    width: 100%;
+  }
+
+  .responsive-table tr {
+    background: var(--surface-subtle);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    padding: 12px;
+    margin-bottom: 10px;
+  }
+
+  .responsive-table td {
+    padding: 6px 0;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    max-width: none !important;
+  }
+
+  .responsive-table td:last-child {
+    border-bottom: none;
+    padding-bottom: 0;
+  }
+
+  .responsive-table td::before {
+    content: attr(data-label);
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--text-muted);
+  }
+}
+
+/* Small Tablets & Phones (<= 640px): keep header clean, search moves inside Mobile Drawer */
+@media (max-width: 640px) {
+  .header-search {
+    display: none;
+  }
+
+  .profile-cover-emblem {
+    top: 10px;
+    right: 10px;
+    font-size: 11px;
+    padding: 4px 9px;
+  }
+
+  .reaction-dock {
+    max-width: calc(100vw - 32px);
+    padding: 5px 6px;
+  }
+
+  .reaction-dock-item {
+    width: 34px;
+    height: 34px;
+  }
+
+  .reaction-emoji {
+    font-size: 20px;
+  }
+}
+
 /* Compact Smartphones (<= 480px) */
 @media (max-width: 480px) {
   .header-inner {
@@ -112,6 +196,7 @@
   .post-action-btn {
     font-size: 12.5px;
     gap: 5px;
+    padding: 0 6px;
   }
 
   .profile-cover {
@@ -128,5 +213,15 @@
 
   .kpi-grid {
     grid-template-columns: 1fr 1fr;
+  }
+
+  .branding-upload-row {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .group-avatar-row {
+    flex-direction: column;
+    align-items: flex-start;
   }
 }

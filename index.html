@@ -5,12 +5,13 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <title>HMM HMM — Connect. Share. Belong.</title>
     <meta name="description" content="HMM HMM — Connect. Share. Belong. A modern Bangladeshi social network built for real-time conversations, community posts, and meaningful connections." />
+    <meta name="keywords" content="HMM HMM, Bangladesh social network, community, real-time chat, group chat, social media" />
     <meta property="og:title" content="HMM HMM — Connect. Share. Belong." />
     <meta property="og:description" content="A modern Bangladeshi social network built for real-time conversations, community posts, and meaningful connections." />
     <meta property="og:type" content="website" />
     <meta property="og:image" content="assets/images/og-banner.svg" />
     <meta name="theme-color" content="#006A4E" />
-    <link rel="icon" type="image/svg+xml" href="assets/icons/favicon.svg" />
+    <link rel="icon" type="image/svg+xml" href="assets/icons/favicon.svg" id="dynamic-favicon" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@600;700;800&family=JetBrains+Mono:wght@500;600&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
@@ -27,6 +28,25 @@
           if (t === "dark" || (!t && window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches)) {
             document.documentElement.classList.add("dark");
           }
+          var rawCfg = localStorage.getItem("hmm_site_config_cache");
+          if (rawCfg) {
+            var cfg = JSON.parse(rawCfg);
+            if (cfg.faviconUrl) {
+              var fav = document.getElementById("dynamic-favicon");
+              if (fav) { fav.href = cfg.faviconUrl; fav.removeAttribute("type"); }
+            }
+            if (cfg.siteName) {
+              document.title = cfg.siteName + (cfg.tagline ? " — " + cfg.tagline : "");
+            }
+            if (cfg.metaDescription) {
+              var md = document.querySelector('meta[name="description"]');
+              if (md) md.setAttribute("content", cfg.metaDescription);
+            }
+            if (cfg.metaKeywords) {
+              var mk = document.querySelector('meta[name="keywords"]');
+              if (mk) mk.setAttribute("content", cfg.metaKeywords);
+            }
+          }
         } catch (e) {}
       })();
     </script>
@@ -34,19 +54,19 @@
   <body>
     <div id="app-root">
       <div class="loading-screen">
-        <img src="assets/icons/logo.svg" alt="HMM HMM" style="width:48px;height:48px;border-radius:12px;" />
+        <img src="assets/icons/logo.svg" alt="HMM HMM" data-site-logo style="width:48px;height:48px;border-radius:12px;object-fit:cover;" />
         <div class="spinner"></div>
-        <p class="text-muted" style="font-size:14px;">Loading HMM HMM...</p>
+        <p class="text-muted" style="font-size:14px;">Loading <span data-site-name>HMM HMM</span>...</p>
       </div>
     </div>
 
-    <!-- Official Firebase Web SDK v11.6.1 Compat CDN (works directly on local file:// and cPanel HTTPS) -->
+    <!-- Official Firebase Web SDK v11.6.1 Compat CDN (works directly on file://, Vercel, and cPanel) -->
     <script src="https://www.gstatic.com/firebasejs/11.6.1/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/11.6.1/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/11.6.1/firebase-database-compat.js"></script>
 
-    <!-- HMM HMM Application Scripts (classic order, zero CORS issues on file://) -->
+    <!-- HMM HMM Application Scripts (classic order, zero build step, zero CORS issues on file://) -->
     <script src="js/firebase.js"></script>
     <script src="js/utils.js"></script>
     <script src="js/auth.js"></script>

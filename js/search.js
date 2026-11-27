@@ -67,11 +67,13 @@
             friendBtn = '<button type="button" class="btn btn-primary btn-sm" data-eaction="add-friend" data-uid="' + U.escapeHtml(u.uid) + '">Add Friend</button>';
           }
 
+          var isOffAdmin = U.isOfficialAdminUser(u);
           return (
             '<div class="person-card">' +
             '<a href="#profile?uid=' + encodeURIComponent(u.uid) + '" class="person-card-top">' +
-            U.renderAvatarHtml({ name: u.name, avatarUrl: u.avatarUrl, avatarColor: u.avatarColor, size: "md" }) +
-            '<div class="user-row-meta"><span class="user-row-name">' + U.escapeHtml(u.name) + "</span>" +
+            U.renderAvatarHtml({ name: u.name, avatarUrl: u.avatarUrl, avatarColor: u.avatarColor, size: "md", isAdmin: isOffAdmin }) +
+            '<div class="user-row-meta"><span class="user-row-name name-with-badge">' + U.escapeHtml(u.name) +
+            (isOffAdmin ? U.renderAdminBadgeHtml("compact") : "") + "</span>" +
             '<span class="user-row-handle">@' + U.escapeHtml(u.username) + (u.location ? " · " + U.escapeHtml(u.location) : "") + "</span></div></a>" +
             '<p class="person-card-bio">' + U.escapeHtml(u.bio || "Member of the HMM HMM community.") + "</p>" +
             '<div class="person-card-actions">' + friendBtn + followBtn + "</div></div>"
@@ -165,8 +167,8 @@
       socialState = next;
       renderPeople();
     });
-    var unsubLikes = HMM.feed.subscribeToUserLikes(ctx.user.uid, function (liked) {
-      postManager.setLikedSet(liked);
+    var unsubLikes = HMM.feed.subscribeToAllPostReactions(ctx.user.uid, function (rMap) {
+      postManager.setReactionsMap(rMap);
       renderPosts();
     });
     var unsubPosts = HMM.feed.subscribeToFeedPosts(50, function (posts) {
