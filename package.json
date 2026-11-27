@@ -1,0 +1,11 @@
+{
+  "name": "klorix-community",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "node server.cjs",
+    "start": "node server.cjs",
+    "build": "node -e \"console.log('KLORIX static site ready')\"",
+    "lint": "node -e \"const fs=require('fs'),cp=require('child_process');for(const f of fs.readdirSync('js').filter(x=>x.endsWith('.js')))cp.execFileSync(process.execPath,['--check','js/'+f],{stdio:'inherit'});console.log('Lint passed')\""
+  }
+}
