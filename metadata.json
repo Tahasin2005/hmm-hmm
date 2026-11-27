@@ -1,0 +1,6 @@
+{
+  "name": "HMM HMM",
+  "description": "Connect. Share. Belong. A modern Bangladeshi social networking platform powered by Firebase.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

@@ -1,0 +1,53 @@
+# ==============================================================================
+# HMM HMM Social Network — Apache / cPanel Configuration (.htaccess)
+# Works in both root domain (public_html/) and subdirectories (public_html/app/)
+# ==============================================================================
+
+Options -Indexes
+DirectoryIndex index.html
+
+<IfModule mod_rewrite.c>
+  RewriteEngine On
+
+  # Block direct web access to the firebase/ rules folder and dotfiles
+  RewriteRule ^firebase(/|$) - [F,L]
+  RewriteRule (^|/)\. - [F,L]
+
+  # Optional: Force HTTPS in production (uncomment after enabling SSL in cPanel)
+  # RewriteCond %{HTTPS} !=on
+  # RewriteCond %{HTTP:X-Forwarded-Proto} !https
+  # RewriteRule ^ https://%{HTTP_HOST}%{REQUEST_URI} [L,R=301]
+</IfModule>
+
+# Ensure proper MIME types for ES6 JavaScript modules, JSON, and SVG icons
+<IfModule mod_mime.c>
+  AddType application/javascript .js .mjs
+  AddType text/css .css
+  AddType image/svg+xml .svg
+  AddType application/json .json
+</IfModule>
+
+# Enable GZIP compression for fast mobile loading in Bangladesh
+<IfModule mod_deflate.c>
+  AddOutputFilterByType DEFLATE text/html text/css application/javascript application/json image/svg+xml
+</IfModule>
+
+# Cache static assets politely while keeping HTML fresh
+<IfModule mod_expires.c>
+  ExpiresActive On
+  ExpiresByType text/html "access plus 0 seconds"
+  ExpiresByType text/css "access plus 7 days"
+  ExpiresByType application/javascript "access plus 7 days"
+  ExpiresByType image/svg+xml "access plus 30 days"
+  ExpiresByType image/png "access plus 30 days"
+  ExpiresByType image/jpeg "access plus 30 days"
+  ExpiresByType image/webp "access plus 30 days"
+</IfModule>
+
+# Security headers compatible with Firebase Auth Popups & CDN modules
+<IfModule mod_headers.c>
+  Header set X-Content-Type-Options "nosniff"
+  Header set Referrer-Policy "strict-origin-when-cross-origin"
+  Header set X-Frame-Options "SAMEORIGIN"
+  Header set Cross-Origin-Opener-Policy "same-origin-allow-popups"
+</IfModule>
