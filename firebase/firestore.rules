@@ -281,7 +281,7 @@ service cloud.firestore {
           'intervalPosts', 'isActive', 'createdAt', 'updatedAt'
         ])
         && isValidId(data.promoId) && data.promoId == promoId
-        && data.promoType in ['video', 'ad']
+        && data.promoType in ['embed', 'image_ad', 'video', 'ad']
         && (!('label' in data) || (data.label is string && data.label.size() <= 40))
         && (!('title' in data) || (data.title is string && data.title.size() <= 140))
         && (!('caption' in data) || (data.caption is string && data.caption.size() <= 1000))
