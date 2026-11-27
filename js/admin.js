@@ -618,6 +618,7 @@
           : embedRaw.value.trim()
           ? '<p class="text-danger" style="font-size:12.5px;">Unrecognized embed URL/iframe.</p>'
           : "";
+        if (parsed && U.fitFacebookPostEmbeds) U.fitFacebookPostEmbeds(embedPrev);
       });
 
       imgFile.addEventListener("change", async function () {

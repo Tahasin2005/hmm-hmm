@@ -1055,6 +1055,50 @@
   color: var(--text);
 }
 
+.native-embed-ext-link {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--accent);
+  white-space: nowrap;
+}
+
+.native-embed-ext-link:hover {
+  text-decoration: underline;
+}
+
+.native-embed-card.native-embed-fb-post {
+  background: var(--surface-subtle);
+}
+
+.fb-post-embed-stage {
+  width: 100%;
+  display: flex;
+  justify-content: center;
+  padding: 10px 8px;
+  background: #F0F2F5;
+  overflow: hidden;
+}
+
+.dark .fb-post-embed-stage {
+  background: #1B2421;
+}
+
+.fb-post-embed-viewport {
+  position: relative;
+  width: 100%;
+  margin: 0 auto;
+  overflow: hidden;
+  border-radius: 10px;
+  background: #FFFFFF;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.08);
+}
+
+.fb-post-embed-viewport iframe {
+  display: block;
+  border: 0;
+  background: #FFFFFF;
+}
+
 /* ============================================================================
  * ANONYMOUS ADMIN IN-FEED PROMOS / VIDEOS & ADS (NO AUTHOR NAME/AVATAR)
  * ============================================================================ */

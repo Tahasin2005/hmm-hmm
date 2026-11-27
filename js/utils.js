@@ -460,7 +460,7 @@
       };
     }
 
-    // 2. Facebook (official plugins/video.php iframe OR direct facebook.com video/reel/watch URL)
+    // 2. Facebook (official plugins/video.php, plugins/post.php, OR direct Facebook video/reel/post URL)
     if (
       host === "facebook.com" ||
       host === "m.facebook.com" ||
@@ -470,6 +470,29 @@
       if (parsed.pathname.indexOf("/plugins/video.php") === 0) {
         var hrefParam = parsed.searchParams.get("href");
         if (!hrefParam) return null;
+        var showVidText = parsed.searchParams.get("show_text") === "true";
+        var vidW = parseInt(extracted.width || parsed.searchParams.get("width") || 0, 10) || 560;
+        var vidH = parseInt(extracted.height || parsed.searchParams.get("height") || 0, 10) || 0;
+        if (showVidText && vidH >= 320) {
+          var clampedVidW = Math.max(350, Math.min(560, vidW));
+          var clampedVidH = Math.max(320, Math.min(1400, vidH));
+          return {
+            provider: "facebook",
+            kind: "post",
+            embedUrl:
+              "https://www.facebook.com/plugins/video.php?href=" +
+              encodeURIComponent(hrefParam) +
+              "&show_text=true&width=" +
+              clampedVidW +
+              "&height=" +
+              clampedVidH,
+            sourceUrl: hrefParam,
+            width: clampedVidW,
+            height: clampedVidH,
+            aspect: "4:3",
+            label: "Facebook Video Post",
+          };
+        }
         var isVerticalPlugin =
           hrefParam.indexOf("/reel") !== -1 ||
           (extracted.height > 0 && extracted.width > 0 && extracted.height > extracted.width * 1.1);
@@ -479,7 +502,9 @@
           "&show_text=false&width=560";
         return {
           provider: "facebook",
+          kind: "video",
           embedUrl: cleanFbUrl,
+          sourceUrl: hrefParam,
           aspect: isVerticalPlugin ? "9:16" : "16:9",
           label: isVerticalPlugin ? "Facebook Reel" : "Facebook Video",
         };
@@ -487,13 +512,27 @@
       if (parsed.pathname.indexOf("/plugins/post.php") === 0) {
         var postHref = parsed.searchParams.get("href");
         if (!postHref) return null;
+        var rawPostW = parseInt(extracted.width || parsed.searchParams.get("width") || 0, 10) || 500;
+        var rawPostH = parseInt(extracted.height || parsed.searchParams.get("height") || 0, 10) || 680;
+        var postW = Math.max(350, Math.min(500, rawPostW));
+        var postH = Math.max(320, Math.min(1400, rawPostH));
+        var showPostText = parsed.searchParams.get("show_text") === "false" ? "false" : "true";
         return {
           provider: "facebook",
+          kind: "post",
           embedUrl:
             "https://www.facebook.com/plugins/post.php?href=" +
             encodeURIComponent(postHref) +
-            "&show_text=true&width=500",
-          aspect: "16:9",
+            "&show_text=" +
+            showPostText +
+            "&width=" +
+            postW +
+            "&height=" +
+            postH,
+          sourceUrl: postHref,
+          width: postW,
+          height: postH,
+          aspect: "4:3",
           label: "Facebook Post",
         };
       }
@@ -510,12 +549,37 @@
         var isReel = lowerPath.indexOf("/reel/") !== -1 || lowerPath.indexOf("/share/r/") !== -1;
         return {
           provider: "facebook",
+          kind: "video",
           embedUrl:
             "https://www.facebook.com/plugins/video.php?href=" +
             encodeURIComponent(urlStr) +
             "&show_text=false&width=560",
+          sourceUrl: urlStr,
           aspect: isReel ? "9:16" : "16:9",
           label: isReel ? "Facebook Reel" : "Facebook Video",
+        };
+      }
+      // Direct Facebook normal post / photo / permalink / share post link
+      var isFbPost =
+        lowerPath.indexOf("/posts/") !== -1 ||
+        lowerPath.indexOf("/photos/") !== -1 ||
+        lowerPath.indexOf("/photo") === 0 ||
+        lowerPath.indexOf("/permalink.php") === 0 ||
+        lowerPath.indexOf("/story.php") === 0 ||
+        lowerPath.indexOf("/share/p/") !== -1;
+      if (isFbPost) {
+        return {
+          provider: "facebook",
+          kind: "post",
+          embedUrl:
+            "https://www.facebook.com/plugins/post.php?href=" +
+            encodeURIComponent(urlStr) +
+            "&show_text=true&width=500&height=680",
+          sourceUrl: urlStr,
+          width: 500,
+          height: 680,
+          aspect: "4:3",
+          label: "Facebook Post",
         };
       }
     }
@@ -525,6 +589,7 @@
     if (vimeoId) {
       return {
         provider: "vimeo",
+        kind: "video",
         embedUrl: "https://player.vimeo.com/video/" + encodeURIComponent(vimeoId),
         aspect: "16:9",
         videoId: vimeoId,
@@ -535,11 +600,92 @@
     return null;
   }
 
+  function fitFacebookPostEmbeds(rootEl) {
+    var scope = rootEl || document;
+    var viewports = scope.querySelectorAll(".fb-post-embed-viewport[data-fb-w][data-fb-h]");
+    viewports.forEach(function (vp) {
+      var fbW = parseInt(vp.getAttribute("data-fb-w"), 10) || 500;
+      var fbH = parseInt(vp.getAttribute("data-fb-h"), 10) || 680;
+      var iframe = vp.querySelector("iframe");
+      if (!iframe) return;
+      var availW = vp.clientWidth;
+      if (!availW) return;
+      if (availW < fbW) {
+        var scale = availW / fbW;
+        iframe.style.width = fbW + "px";
+        iframe.style.height = fbH + "px";
+        iframe.style.transform = "scale(" + scale.toFixed(4) + ")";
+        iframe.style.transformOrigin = "top left";
+        vp.style.height = Math.ceil(fbH * scale) + "px";
+      } else {
+        iframe.style.width = fbW + "px";
+        iframe.style.height = fbH + "px";
+        iframe.style.transform = "none";
+        iframe.style.transformOrigin = "top left";
+        vp.style.height = fbH + "px";
+      }
+    });
+  }
+
+  var fbResizeTimer = null;
+  if (typeof window !== "undefined") {
+    window.addEventListener("resize", function () {
+      clearTimeout(fbResizeTimer);
+      fbResizeTimer = setTimeout(function () {
+        fitFacebookPostEmbeds(document);
+      }, 120);
+    });
+  }
+
   function renderEmbedPlayerHtml(embedObj) {
     if (!embedObj || !embedObj.embedUrl) return "";
     // Re-validate stored embedUrl strictly before rendering
     var safe = parseSafeEmbedInput(embedObj.embedUrl);
     if (!safe) return "";
+
+    if (safe.kind === "post") {
+      var fbW = safe.width || 500;
+      var fbH = safe.height || 680;
+      var safeSourceLink =
+        safe.sourceUrl && validateOptionalUrl(safe.sourceUrl) === null ? safe.sourceUrl : "";
+
+      return (
+        '<div class="native-embed-card native-embed-fb-post">' +
+        '<div class="fb-post-embed-stage">' +
+        '<div class="fb-post-embed-viewport" data-fb-w="' +
+        fbW +
+        '" data-fb-h="' +
+        fbH +
+        '" style="max-width:' +
+        fbW +
+        "px;height:" +
+        fbH +
+        'px;">' +
+        '<iframe src="' +
+        escapeHtml(safe.embedUrl) +
+        '" title="' +
+        escapeHtml(safe.label || "Facebook Post") +
+        '" width="' +
+        fbW +
+        '" height="' +
+        fbH +
+        '" frameborder="0" scrolling="auto" allow="autoplay; clipboard-write; encrypted-media; picture-in-picture; web-share" allowfullscreen loading="lazy" referrerpolicy="strict-origin-when-cross-origin"></iframe>' +
+        "</div></div>" +
+        '<div class="native-embed-bar">' +
+        '<span class="native-embed-provider">' +
+        ICONS.globe +
+        "<span>" +
+        escapeHtml(safe.label || "Facebook Post") +
+        "</span></span>" +
+        (safeSourceLink
+          ? '<a href="' +
+            escapeHtml(safeSourceLink) +
+            '" target="_blank" rel="noopener noreferrer" class="native-embed-ext-link">Open on Facebook &rarr;</a>'
+          : "") +
+        "</div></div>"
+      );
+    }
+
     var aspect = embedObj.aspect || safe.aspect || "16:9";
     var isVertical = aspect === "9:16";
     var providerLabel =
@@ -566,8 +712,8 @@
       '<span class="native-embed-provider">' +
       ICONS.video +
       "<span>" +
-      escapeHtml(providerLabel) +
-      " Video</span></span>" +
+      escapeHtml(safe.label || providerLabel + " Video") +
+      "</span></span>" +
       "</div></div>"
     );
   }
@@ -799,6 +945,7 @@
 
   function hydrateLinkPreviews(rootEl) {
     if (!rootEl) return;
+    fitFacebookPostEmbeds(rootEl);
     var cards = rootEl.querySelectorAll('.link-preview-web[data-og-hydrated="0"]');
     cards.forEach(function (card) {
       var url = card.getAttribute("data-og-url");
@@ -2015,6 +2162,7 @@
     formatRichText: linkifyText,
     parseSafeEmbedInput: parseSafeEmbedInput,
     renderEmbedPlayerHtml: renderEmbedPlayerHtml,
+    fitFacebookPostEmbeds: fitFacebookPostEmbeds,
     isOwnBrandUrl: isOwnBrandUrl,
     classifyUrl: classifyUrl,
     renderSmartPreviewHtml: renderSmartPreviewHtml,

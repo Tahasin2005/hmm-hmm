@@ -911,7 +911,13 @@
           "</div>" +
           '<div class="post-meta-sub"><span>@' + U.escapeHtml(post.authorUsername) + "</span><span>·</span><span>" +
           U.escapeHtml(U.formatRelativeTime(post.createdAt)) + "</span>" +
-          (isEmbedPost ? '<span>·</span><span class="post-embed-pill">' + U.ICONS.video + " Video</span>" : "") +
+          (isEmbedPost
+            ? '<span>·</span><span class="post-embed-pill">' +
+              (String(post.embedUrl || "").indexOf("/plugins/post.php") !== -1
+                ? U.ICONS.globe + " Facebook Post"
+                : U.ICONS.video + " Video") +
+              "</span>"
+            : "") +
           (wasEdited ? "<span>· Edited</span>" : "") + "</div>" +
           "</div></div>" +
           (!readOnly
@@ -1321,7 +1327,7 @@
       '<section class="card composer-card">' +
       '<div class="composer-mode-tabs" id="composer-mode-tabs" role="tablist">' +
       '<button type="button" class="composer-mode-tab active" data-cmode="text" role="tab">' + U.ICONS.edit + "<span>Text Post</span></button>" +
-      '<button type="button" class="composer-mode-tab" data-cmode="embed" role="tab">' + U.ICONS.video + "<span>Embed Video</span></button>" +
+      '<button type="button" class="composer-mode-tab" data-cmode="embed" role="tab">' + U.ICONS.video + "<span>Embed Video / Post</span></button>" +
       "</div>" +
       '<div class="composer-top">' +
       U.renderAvatarHtml({
@@ -1334,9 +1340,9 @@
       '<div class="composer-fields">' +
       '<textarea id="post-composer-input" class="composer-textarea" maxlength="' + U.LIMITS.POST_TEXT_MAX + '" placeholder="What\'s on your mind, ' + U.escapeHtml(ctx.profile.name.split(" ")[0]) + '? Use @mentions, #hashtags, or paste any link..."></textarea>' +
       '<div id="composer-embed-box" class="composer-embed-box hidden">' +
-      '<label class="form-label" for="post-embed-input" style="font-size:12.5px;margin-bottom:4px;">Paste YouTube or Facebook embed &lt;iframe&gt; code or video link</label>' +
-      '<textarea id="post-embed-input" class="form-textarea font-mono" rows="2" placeholder=\'<iframe src="https://www.youtube.com/embed/..."></iframe> or https://youtu.be/... or Facebook video/reel link\'></textarea>' +
-      '<div id="composer-embed-status" class="composer-embed-status text-muted">Supports YouTube, YouTube Shorts, Facebook Videos, Facebook Reels &amp; Vimeo.</div>' +
+      '<label class="form-label" for="post-embed-input" style="font-size:12.5px;margin-bottom:4px;">Paste Facebook Post/Video or YouTube embed &lt;iframe&gt; code or link</label>' +
+      '<textarea id="post-embed-input" class="form-textarea font-mono" rows="2" placeholder=\'<iframe src="https://www.facebook.com/plugins/post.php?..."></iframe> or Facebook post/video/reel or YouTube link\'></textarea>' +
+      '<div id="composer-embed-status" class="composer-embed-status text-muted">Supports Facebook Posts (photos/text), Facebook Videos &amp; Reels, YouTube, Shorts &amp; Vimeo.</div>' +
       '<div id="composer-embed-preview"></div>' +
       "</div>" +
       '<div id="composer-tagged-chips" class="composer-tagged-chips hidden"></div>' +
@@ -1346,7 +1352,7 @@
       '<div class="composer-tools">' +
       '<button type="button" class="composer-tool-btn" id="btn-composer-tag" title="Tag people in this post">' + U.ICONS.tag + "<span>Tag People</span></button>" +
       '<button type="button" class="composer-tool-btn" id="btn-composer-hash" title="Insert #hashtag">' + U.ICONS.hash + "<span>Hashtag</span></button>" +
-      '<button type="button" class="composer-tool-btn" id="btn-composer-embed-shortcut" title="Embed a YouTube or Facebook video">' + U.ICONS.code + "<span>Embed</span></button>" +
+      '<button type="button" class="composer-tool-btn" id="btn-composer-embed-shortcut" title="Embed a Facebook post/video or YouTube video">' + U.ICONS.code + "<span>Embed</span></button>" +
       '<span class="composer-counter" id="composer-counter">0 / ' + U.LIMITS.POST_TEXT_MAX + "</span>" +
       "</div>" +
       '<button type="button" id="post-submit-btn" class="btn btn-primary" disabled>' + U.ICONS.send + "<span>Post</span></button>" +
@@ -1656,7 +1662,7 @@
     function updateEmbedPreview() {
       var raw = embedInput.value.trim();
       if (!raw) {
-        embedStatus.textContent = "Supports YouTube, YouTube Shorts, Facebook Videos, Facebook Reels & Vimeo.";
+        embedStatus.textContent = "Supports Facebook Posts (photos/text), Facebook Videos & Reels, YouTube, Shorts & Vimeo.";
         embedStatus.className = "composer-embed-status text-muted";
         embedPreviewEl.innerHTML = "";
         updateSubmitState();
@@ -1665,11 +1671,12 @@
       var parsed = U.parseSafeEmbedInput(raw);
       if (parsed) {
         embedStatus.textContent = "Valid " + parsed.label + " detected — ready to embed natively!";
-        embedStatus.className = "composer-embed-status text-success";
+        embedStatus.className = "composer-embed-status ok";
         embedPreviewEl.innerHTML = U.renderEmbedPlayerHtml(parsed);
+        if (U.fitFacebookPostEmbeds) U.fitFacebookPostEmbeds(embedPreviewEl);
       } else {
-        embedStatus.textContent = "Unrecognized embed. Paste a YouTube/Facebook/Vimeo <iframe> code or video URL.";
-        embedStatus.className = "composer-embed-status text-danger";
+        embedStatus.textContent = "Unrecognized embed. Paste a Facebook Post/Video or YouTube/Vimeo <iframe> code or link.";
+        embedStatus.className = "composer-embed-status err";
         embedPreviewEl.innerHTML = "";
       }
       updateSubmitState();
