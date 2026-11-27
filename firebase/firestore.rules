@@ -79,7 +79,8 @@ service cloud.firestore {
         ])
         && data.keys().hasOnly([
           'uid', 'name', 'username', 'bio', 'avatarUrl', 'avatarColor',
-          'location', 'visibility', 'friendRequestPref',
+          'location', 'jobTitle', 'workplace', 'birthDate', 'socialLinks',
+          'coverPhotoUrl', 'visibility', 'friendRequestPref',
           'followersCount', 'followingCount', 'friendsCount', 'postsCount',
           'isSuspended', 'role', 'createdAt', 'updatedAt'
         ])
@@ -87,9 +88,14 @@ service cloud.firestore {
         && data.name is string && data.name.size() >= 1 && data.name.size() <= 80
         && isValidUsername(data.username)
         && data.bio is string && data.bio.size() <= 280
-        && data.avatarUrl is string && data.avatarUrl.size() <= 500
+        && data.avatarUrl is string && data.avatarUrl.size() <= 160000
         && data.avatarColor is string && data.avatarColor.size() >= 1 && data.avatarColor.size() <= 32
         && data.location is string && data.location.size() <= 80
+        && (!('jobTitle' in data) || (data.jobTitle is string && data.jobTitle.size() <= 80))
+        && (!('workplace' in data) || (data.workplace is string && data.workplace.size() <= 100))
+        && (!('birthDate' in data) || (data.birthDate is string && data.birthDate.size() <= 20))
+        && (!('socialLinks' in data) || (data.socialLinks is list && data.socialLinks.size() <= 10))
+        && (!('coverPhotoUrl' in data) || (data.coverPhotoUrl is string && data.coverPhotoUrl.size() <= 350000))
         && (data.visibility == 'public' || data.visibility == 'friends')
         && (data.friendRequestPref == 'everyone' || data.friendRequestPref == 'none')
         && data.followersCount is int && data.followersCount >= 0
@@ -97,7 +103,7 @@ service cloud.firestore {
         && data.friendsCount is int && data.friendsCount >= 0
         && data.postsCount is int && data.postsCount >= 0
         && data.isSuspended is bool
-        && (!('role' in data) || data.role == 'member' || (data.role == 'admin' && isAdmin()))
+        && (!('role' in data) || data.role in ['member', 'admin'])
         && data.createdAt is timestamp
         && data.updatedAt is timestamp;
     }
@@ -122,7 +128,7 @@ service cloud.firestore {
       return data.keys().hasAll([
           'postId', 'authorId', 'authorName', 'authorUsername',
           'authorAvatarUrl', 'authorAvatarColor', 'text', 'visibility',
-          'likesCount', 'commentsCount', 'sharesCount', 'createdAt', 'updatedAt'
+          'likesCount', 'commentsCount', 'createdAt', 'updatedAt'
         ])
         && data.keys().hasOnly([
           'postId', 'authorId', 'authorName', 'authorUsername',
@@ -135,9 +141,9 @@ service cloud.firestore {
         && isValidId(data.authorId)
         && data.authorName is string && data.authorName.size() >= 1 && data.authorName.size() <= 80
         && isValidUsername(data.authorUsername)
-        && data.authorAvatarUrl is string && data.authorAvatarUrl.size() <= 500
+        && data.authorAvatarUrl is string && data.authorAvatarUrl.size() <= 160000
         && data.authorAvatarColor is string && data.authorAvatarColor.size() >= 1 && data.authorAvatarColor.size() <= 32
-        && (!('authorRole' in data) || data.authorRole == 'member' || (data.authorRole == 'admin' && isAdmin()))
+        && (!('authorRole' in data) || data.authorRole in ['member', 'admin'])
         && data.text is string && data.text.size() <= 2000
         && (
           data.text.size() >= 1 ||
@@ -145,7 +151,7 @@ service cloud.firestore {
         )
         && (!('postType' in data) || data.postType in ['text', 'embed'])
         && (!('embedProvider' in data) || data.embedProvider in ['', 'youtube', 'facebook', 'vimeo'])
-        && (!('embedUrl' in data) || (data.embedUrl is string && data.embedUrl.size() <= 1000))
+        && (!('embedUrl' in data) || (data.embedUrl is string && data.embedUrl.size() <= 2000))
         && (!('embedAspect' in data) || data.embedAspect in ['16:9', '9:16', '4:3', '1:1'])
         && (!('taggedUsers' in data) || (data.taggedUsers is list && data.taggedUsers.size() <= 20))
         && (!('hashtags' in data) || (data.hashtags is list && data.hashtags.size() <= 30))
@@ -153,7 +159,7 @@ service cloud.firestore {
         && data.visibility == 'public'
         && data.likesCount is int && data.likesCount >= 0
         && data.commentsCount is int && data.commentsCount >= 0
-        && data.sharesCount is int && data.sharesCount >= 0
+        && (!('sharesCount' in data) || (data.sharesCount is int && data.sharesCount >= 0))
         && data.createdAt is timestamp
         && data.updatedAt is timestamp;
     }
@@ -173,9 +179,9 @@ service cloud.firestore {
         && isValidId(data.authorId)
         && data.authorName is string && data.authorName.size() >= 1 && data.authorName.size() <= 80
         && isValidUsername(data.authorUsername)
-        && data.authorAvatarUrl is string && data.authorAvatarUrl.size() <= 500
+        && data.authorAvatarUrl is string && data.authorAvatarUrl.size() <= 160000
         && data.authorAvatarColor is string && data.authorAvatarColor.size() >= 1 && data.authorAvatarColor.size() <= 32
-        && (!('authorRole' in data) || data.authorRole == 'member' || (data.authorRole == 'admin' && isAdmin()))
+        && (!('authorRole' in data) || data.authorRole in ['member', 'admin'])
         && (!('mentions' in data) || (data.mentions is list && data.mentions.size() <= 20))
         && data.text is string && data.text.size() >= 1 && data.text.size() <= 1000
         && data.visibility == 'public'
@@ -196,7 +202,7 @@ service cloud.firestore {
         && (!('reactionType' in data) || isValidReactionType(data.reactionType))
         && (!('userName' in data) || (data.userName is string && data.userName.size() <= 80))
         && (!('userUsername' in data) || (data.userUsername is string && data.userUsername.size() <= 30))
-        && (!('userAvatarUrl' in data) || (data.userAvatarUrl is string && data.userAvatarUrl.size() <= 500))
+        && (!('userAvatarUrl' in data) || (data.userAvatarUrl is string && data.userAvatarUrl.size() <= 160000))
         && (!('userAvatarColor' in data) || (data.userAvatarColor is string && data.userAvatarColor.size() <= 32))
         && (!('userRole' in data) || data.userRole in ['member', 'admin'])
         && data.createdAt is timestamp
@@ -218,7 +224,7 @@ service cloud.firestore {
         && isValidReactionType(data.reactionType)
         && (!('userName' in data) || (data.userName is string && data.userName.size() <= 80))
         && (!('userUsername' in data) || (data.userUsername is string && data.userUsername.size() <= 30))
-        && (!('userAvatarUrl' in data) || (data.userAvatarUrl is string && data.userAvatarUrl.size() <= 500))
+        && (!('userAvatarUrl' in data) || (data.userAvatarUrl is string && data.userAvatarUrl.size() <= 160000))
         && (!('userAvatarColor' in data) || (data.userAvatarColor is string && data.userAvatarColor.size() <= 32))
         && (!('userRole' in data) || data.userRole in ['member', 'admin'])
         && data.createdAt is timestamp
@@ -239,7 +245,7 @@ service cloud.firestore {
         && data.blockId == data.blockerId + '_' + data.blockedId
         && (!('blockedName' in data) || (data.blockedName is string && data.blockedName.size() <= 80))
         && (!('blockedUsername' in data) || (data.blockedUsername is string && data.blockedUsername.size() <= 30))
-        && (!('blockedAvatarUrl' in data) || (data.blockedAvatarUrl is string && data.blockedAvatarUrl.size() <= 500))
+        && (!('blockedAvatarUrl' in data) || (data.blockedAvatarUrl is string && data.blockedAvatarUrl.size() <= 160000))
         && (!('blockedAvatarColor' in data) || (data.blockedAvatarColor is string && data.blockedAvatarColor.size() <= 32))
         && data.createdAt is timestamp;
     }
@@ -263,7 +269,7 @@ service cloud.firestore {
         && isValidId(data.authorId)
         && data.authorName is string && data.authorName.size() >= 1 && data.authorName.size() <= 80
         && isValidUsername(data.authorUsername)
-        && (!('authorAvatarUrl' in data) || (data.authorAvatarUrl is string && data.authorAvatarUrl.size() <= 500))
+        && (!('authorAvatarUrl' in data) || (data.authorAvatarUrl is string && data.authorAvatarUrl.size() <= 160000))
         && (!('authorAvatarColor' in data) || (data.authorAvatarColor is string && data.authorAvatarColor.size() <= 32))
         && data.isActive is bool
         && data.createdAt is timestamp
@@ -286,7 +292,7 @@ service cloud.firestore {
         && (!('title' in data) || (data.title is string && data.title.size() <= 140))
         && (!('caption' in data) || (data.caption is string && data.caption.size() <= 1000))
         && (!('embedProvider' in data) || data.embedProvider in ['', 'youtube', 'facebook', 'vimeo'])
-        && (!('embedUrl' in data) || (data.embedUrl is string && data.embedUrl.size() <= 1000))
+        && (!('embedUrl' in data) || (data.embedUrl is string && data.embedUrl.size() <= 2000))
         && (!('embedAspect' in data) || data.embedAspect in ['16:9', '9:16', '4:3', '1:1'])
         && (!('imageUrl' in data) || (data.imageUrl is string && data.imageUrl.size() <= 350000))
         && (!('ctaText' in data) || (data.ctaText is string && data.ctaText.size() <= 60))
@@ -482,6 +488,7 @@ service cloud.firestore {
     // =========================================================================
     match /blocks/{blockId} {
       allow get: if isSignedIn() && isValidId(blockId) && (
+        resource == null ||
         existing().blockerId == request.auth.uid ||
         existing().blockedId == request.auth.uid ||
         isAdmin()
@@ -508,8 +515,9 @@ service cloud.firestore {
     // =========================================================================
     match /users/{uid} {
       allow get: if isSignedIn() && isValidId(uid) && (
-        existing().visibility == 'public' ||
+        resource == null ||
         isOwner(uid) ||
+        existing().visibility == 'public' ||
         exists(/databases/$(database)/documents/friendships/$(pairId(request.auth.uid, uid))) ||
         isAdmin()
       );
@@ -524,6 +532,7 @@ service cloud.firestore {
         && isValidId(uid)
         && isOwner(uid)
         && isValidUserProfile(incoming(), uid)
+        && (!('role' in incoming()) || incoming().role == 'member' || isAdmin())
         && incoming().followersCount == 0
         && incoming().followingCount == 0
         && incoming().friendsCount == 0
@@ -535,46 +544,73 @@ service cloud.firestore {
 
       allow update: if isVerifiedUser()
         && isValidId(uid)
-        && isValidUserProfile(incoming(), uid)
         && incoming().uid == existing().uid
         && incoming().createdAt == existing().createdAt
         && (
           (
             isOwner(uid)
+            && isValidUserProfile(incoming(), uid)
             && existing().isSuspended == false
             && incoming().isSuspended == existing().isSuspended
-            && incoming().diff(existing()).affectedKeys().hasOnly([
-              'name', 'username', 'bio', 'avatarUrl', 'avatarColor',
-              'location', 'visibility', 'friendRequestPref', 'updatedAt'
-            ])
+            && (
+              incoming().diff(existing()).affectedKeys().hasOnly([
+                'name', 'username', 'bio', 'avatarUrl', 'avatarColor',
+                'location', 'jobTitle', 'workplace', 'birthDate', 'socialLinks',
+                'visibility', 'friendRequestPref', 'updatedAt'
+              ]) ||
+              (
+                isAdmin()
+                && incoming().diff(existing()).affectedKeys().hasOnly([
+                  'name', 'username', 'bio', 'avatarUrl', 'avatarColor',
+                  'location', 'jobTitle', 'workplace', 'birthDate', 'socialLinks',
+                  'coverPhotoUrl', 'visibility', 'friendRequestPref', 'updatedAt'
+                ])
+              )
+            )
             && incoming().updatedAt == request.time
             && getAfter(/databases/$(database)/documents/usernames/$(incoming().username)).data.uid == uid
           ) ||
           (
             isOwner(uid)
+            && isAdmin()
+            && incoming().diff(existing()).affectedKeys().hasOnly(['coverPhotoUrl', 'updatedAt'])
+            && incoming().coverPhotoUrl is string && incoming().coverPhotoUrl.size() <= 350000
+            && incoming().updatedAt == request.time
+          ) ||
+          (
+            isOwner(uid)
+            && incoming().diff(existing()).affectedKeys().hasOnly(['avatarUrl', 'updatedAt'])
+            && incoming().avatarUrl is string && incoming().avatarUrl.size() <= 160000
+            && incoming().updatedAt == request.time
+          ) ||
+          (
+            isOwner(uid)
             && incoming().diff(existing()).affectedKeys().hasOnly(['postsCount'])
+            && incoming().postsCount is int && incoming().postsCount >= 0
             && (
-              incoming().postsCount == existing().postsCount + 1 ||
-              (existing().postsCount > 0 && incoming().postsCount == existing().postsCount - 1)
+              incoming().postsCount == (('postsCount' in existing() ? existing().postsCount : 0) + 1) ||
+              (('postsCount' in existing() ? existing().postsCount : 0) > 0 && incoming().postsCount == existing().postsCount - 1)
             )
           ) ||
           (
             isOwner(uid)
             && incoming().diff(existing()).affectedKeys().hasOnly(['followingCount'])
+            && incoming().followingCount is int && incoming().followingCount >= 0
             && (
-              incoming().followingCount == existing().followingCount + 1 ||
-              (existing().followingCount > 0 && incoming().followingCount == existing().followingCount - 1)
+              incoming().followingCount == (('followingCount' in existing() ? existing().followingCount : 0) + 1) ||
+              (('followingCount' in existing() ? existing().followingCount : 0) > 0 && incoming().followingCount == existing().followingCount - 1)
             )
           ) ||
           (
             !isOwner(uid)
             && incoming().diff(existing()).affectedKeys().hasOnly(['followersCount'])
+            && incoming().followersCount is int && incoming().followersCount >= 0
             && (
               (
-                incoming().followersCount == existing().followersCount + 1
+                incoming().followersCount == (('followersCount' in existing() ? existing().followersCount : 0) + 1)
                 && existsAfter(/databases/$(database)/documents/follows/$(request.auth.uid + '_' + uid))
               ) || (
-                existing().followersCount > 0
+                ('followersCount' in existing() ? existing().followersCount : 0) > 0
                 && incoming().followersCount == existing().followersCount - 1
                 && !existsAfter(/databases/$(database)/documents/follows/$(request.auth.uid + '_' + uid))
               )
@@ -582,15 +618,16 @@ service cloud.firestore {
           ) ||
           (
             incoming().diff(existing()).affectedKeys().hasOnly(['friendsCount'])
+            && incoming().friendsCount is int && incoming().friendsCount >= 0
             && (
               (
-                incoming().friendsCount == existing().friendsCount + 1
+                incoming().friendsCount == (('friendsCount' in existing() ? existing().friendsCount : 0) + 1)
                 && (
                   isOwner(uid) ||
                   existsAfter(/databases/$(database)/documents/friendships/$(pairId(request.auth.uid, uid)))
                 )
               ) || (
-                existing().friendsCount > 0
+                ('friendsCount' in existing() ? existing().friendsCount : 0) > 0
                 && incoming().friendsCount == existing().friendsCount - 1
                 && (
                   isOwner(uid) ||
@@ -648,6 +685,7 @@ service cloud.firestore {
     // =========================================================================
     match /posts/{postId} {
       allow get: if isSignedIn() && isValidId(postId) && (
+        resource == null ||
         existing().visibility == 'public' ||
         existing().authorId == request.auth.uid ||
         isAdmin()
@@ -662,12 +700,13 @@ service cloud.firestore {
       allow create: if isVerifiedUser()
         && isValidId(postId)
         && isValidPost(incoming(), postId)
+        && (!('authorRole' in incoming()) || incoming().authorRole == 'member' || isAdmin())
         && (
           (
             incoming().authorId == request.auth.uid
             && incoming().likesCount == 0
             && incoming().commentsCount == 0
-            && incoming().sharesCount == 0
+            && (!('sharesCount' in incoming()) || incoming().sharesCount == 0)
             && incoming().createdAt == request.time
             && incoming().updatedAt == request.time
             && exists(/databases/$(database)/documents/users/$(request.auth.uid))
@@ -677,24 +716,25 @@ service cloud.firestore {
 
       allow update: if isVerifiedUser()
         && isValidId(postId)
-        && isValidPost(incoming(), postId)
         && incoming().postId == existing().postId
         && incoming().authorId == existing().authorId
         && incoming().createdAt == existing().createdAt
         && (
           (
             existing().authorId == request.auth.uid
+            && isValidPost(incoming(), postId)
             && incoming().diff(existing()).affectedKeys().hasOnly(['text', 'hashtags', 'mentions', 'updatedAt'])
             && incoming().updatedAt == request.time
           ) ||
           (
             incoming().diff(existing()).affectedKeys().hasOnly(['likesCount'])
+            && incoming().likesCount is int && incoming().likesCount >= 0
             && (
               (
-                incoming().likesCount == existing().likesCount + 1
+                incoming().likesCount == (('likesCount' in existing() ? existing().likesCount : 0) + 1)
                 && existsAfter(/databases/$(database)/documents/likes/$(postId + '_' + request.auth.uid))
               ) || (
-                existing().likesCount > 0
+                ('likesCount' in existing() ? existing().likesCount : 0) > 0
                 && incoming().likesCount == existing().likesCount - 1
                 && !existsAfter(/databases/$(database)/documents/likes/$(postId + '_' + request.auth.uid))
               )
@@ -702,16 +742,18 @@ service cloud.firestore {
           ) ||
           (
             incoming().diff(existing()).affectedKeys().hasOnly(['commentsCount'])
+            && incoming().commentsCount is int && incoming().commentsCount >= 0
             && (
-              incoming().commentsCount == existing().commentsCount + 1 ||
-              (existing().commentsCount > 0 && incoming().commentsCount == existing().commentsCount - 1)
+              incoming().commentsCount == (('commentsCount' in existing() ? existing().commentsCount : 0) + 1) ||
+              (('commentsCount' in existing() ? existing().commentsCount : 0) > 0 && incoming().commentsCount == existing().commentsCount - 1)
             )
           ) ||
           (
             incoming().diff(existing()).affectedKeys().hasOnly(['sharesCount'])
-            && incoming().sharesCount == existing().sharesCount + 1
+            && incoming().sharesCount is int && incoming().sharesCount >= 0
+            && incoming().sharesCount == (('sharesCount' in existing() ? existing().sharesCount : 0) + 1)
           ) ||
-          isAdmin()
+          (isAdmin() && isValidPost(incoming(), postId))
         );
 
       allow delete: if isVerifiedUser() && isValidId(postId) && (existing().authorId == request.auth.uid || isAdmin());
@@ -722,6 +764,7 @@ service cloud.firestore {
     // =========================================================================
     match /comments/{commentId} {
       allow get: if isSignedIn() && isValidId(commentId) && (
+        resource == null ||
         existing().visibility == 'public' ||
         existing().authorId == request.auth.uid ||
         isAdmin()
@@ -736,6 +779,7 @@ service cloud.firestore {
       allow create: if isVerifiedUser()
         && isValidId(commentId)
         && isValidComment(incoming(), commentId)
+        && (!('authorRole' in incoming()) || incoming().authorRole == 'member' || isAdmin())
         && (
           (
             incoming().authorId == request.auth.uid
@@ -808,6 +852,7 @@ service cloud.firestore {
     // =========================================================================
     match /friendRequests/{requestId} {
       allow get: if isSignedIn() && isValidId(requestId) && (
+        resource == null ||
         existing().senderId == request.auth.uid ||
         existing().receiverId == request.auth.uid ||
         isAdmin()
@@ -865,6 +910,7 @@ service cloud.firestore {
     // =========================================================================
     match /friendships/{friendshipId} {
       allow get: if isSignedIn() && isValidId(friendshipId) && (
+        resource == null ||
         existing().user1Id == request.auth.uid ||
         existing().user2Id == request.auth.uid ||
         isAdmin()
@@ -898,6 +944,7 @@ service cloud.firestore {
     // =========================================================================
     match /follows/{followId} {
       allow get: if isSignedIn() && isValidId(followId) && (
+        resource == null ||
         existing().followerId == request.auth.uid ||
         existing().followingId == request.auth.uid ||
         isAdmin()
@@ -931,6 +978,7 @@ service cloud.firestore {
     // =========================================================================
     match /notifications/{notificationId} {
       allow get: if isSignedIn() && isValidId(notificationId) && (
+        resource == null ||
         existing().recipientId == request.auth.uid ||
         isAdmin()
       );
@@ -977,6 +1025,7 @@ service cloud.firestore {
     // =========================================================================
     match /reports/{reportId} {
       allow get: if isSignedIn() && isValidId(reportId) && (
+        resource == null ||
         existing().reporterId == request.auth.uid ||
         isAdmin()
       );

@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>KLORIX — Profile</title>
+    <meta property="og:site_name" content="KLORIX" />
+    <meta property="og:title" content="KLORIX — Connect. Share. Belong." />
+    <meta property="og:description" content="View this profile on KLORIX Community." />
+    <meta property="og:image" content="https://klorixcommunity.vercel.app/assets/images/og-banner.png" />
+    <link rel="icon" type="image/svg+xml" href="/assets/icons/favicon.svg" />
+    <script>
+      (function () {
+        var path = (window.location.pathname || "").replace(/^\/+|\/+$/g, "");
+        if (path && path.indexOf("/") === -1 && path.indexOf(".") === -1) {
+          var handle = path.replace(/^@/, "").toLowerCase().replace(/[^a-z0-9_]/g, "");
+          if (handle.length >= 3 && handle.length <= 20) {
+            window.location.replace("/#profile?u=" + encodeURIComponent(handle));
+            return;
+          }
+        }
+      })();
+    </script>
+    <style>
+      body {
+        margin: 0;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+        background: #F4F6F5;
+        color: #111827;
+        min-height: 100vh;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 24px;
+      }
+      .card {
+        background: #FFFFFF;
+        border: 1px solid #E5E7EB;
+        border-radius: 16px;
+        padding: 32px 28px;
+        max-width: 400px;
+        width: 100%;
+        text-align: center;
+        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.06);
+      }
+      .card h1 {
+        margin: 0 0 8px;
+        font-size: 22px;
+      }
+      .card p {
+        margin: 0 0 20px;
+        color: #6B7280;
+        font-size: 14px;
+        line-height: 1.5;
+      }
+      .btn {
+        display: inline-block;
+        padding: 10px 20px;
+        border-radius: 10px;
+        background: #006A4E;
+        color: #FFFFFF;
+        text-decoration: none;
+        font-weight: 700;
+        font-size: 14px;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="card">
+      <h1>KLORIX</h1>
+      <p>Redirecting you to KLORIX Community...</p>
+      <a class="btn" href="/">Go to KLORIX Home</a>
+    </div>
+  </body>
+</html>

@@ -16,8 +16,10 @@
     USERNAME_MIN: 3,
     USERNAME_MAX: 20,
     BIO_MAX: 280,
-    AVATAR_URL_MAX: 500,
+    AVATAR_URL_MAX: 150000,
     LOCATION_MAX: 80,
+    JOB_TITLE_MAX: 80,
+    WORKPLACE_MAX: 100,
     POST_TEXT_MAX: 2000,
     COMMENT_TEXT_MAX: 1000,
     MESSAGE_TEXT_MAX: 2000,
@@ -26,6 +28,120 @@
     ANNOUNCEMENT_TITLE_MAX: 140,
     ANNOUNCEMENT_MESSAGE_MAX: 2000,
   };
+
+  // ============================================================================
+  // SOCIAL MEDIA PLATFORMS REGISTRY (Profile Links)
+  // ============================================================================
+  var SOCIAL_PLATFORMS = [
+    {
+      id: "facebook",
+      label: "Facebook",
+      color: "#1877F2",
+      placeholder: "https://facebook.com/yourprofile",
+      icon: '<svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M22 12c0-5.523-4.477-10-10-10S2 6.477 2 12c0 4.991 3.657 9.128 8.438 9.878v-6.987h-2.54V12h2.54V9.797c0-2.506 1.492-3.89 3.777-3.89 1.094 0 2.238.195 2.238.195v2.46h-1.26c-1.243 0-1.63.771-1.63 1.562V12h2.773l-.443 2.89h-2.33v6.988C18.343 21.128 22 16.991 22 12z"/></svg>',
+    },
+    {
+      id: "instagram",
+      label: "Instagram",
+      color: "#E4405F",
+      placeholder: "https://instagram.com/yourhandle",
+      icon: '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="2" width="20" height="20" rx="5" ry="5"/><path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z"/><line x1="17.5" y1="6.5" x2="17.51" y2="6.5"/></svg>',
+    },
+    {
+      id: "tiktok",
+      label: "TikTok",
+      color: "#FE2C55",
+      placeholder: "https://tiktok.com/@yourhandle",
+      icon: '<svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M19.59 6.69a4.83 4.83 0 0 1-3.77-4.25V2h-3.45v13.67a2.89 2.89 0 0 1-2.88 2.5 2.89 2.89 0 0 1-2.89-2.89 2.89 2.89 0 0 1 2.89-2.89c.28 0 .54.04.79.1V9.01a6.33 6.33 0 0 0-.79-.05 6.34 6.34 0 0 0-6.34 6.34 6.34 6.34 0 0 0 6.34 6.34 6.34 6.34 0 0 0 6.33-6.34V8.69a8.18 8.18 0 0 0 4.78 1.52V6.76a4.85 4.85 0 0 1-1.01-.07z"/></svg>',
+    },
+    {
+      id: "youtube",
+      label: "YouTube",
+      color: "#FF0000",
+      placeholder: "https://youtube.com/@yourchannel",
+      icon: '<svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/></svg>',
+    },
+    {
+      id: "blogger",
+      label: "Blogger",
+      color: "#F57D00",
+      placeholder: "https://yourblog.blogspot.com",
+      icon: '<svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-3 13.5c0 .83-.67 1.5-1.5 1.5h-5c-.83 0-1.5-.67-1.5-1.5v-9C8 6.67 8.67 6 9.5 6h3.5c1.38 0 2.5 1.12 2.5 2.5 0 .61-.22 1.17-.59 1.6.64.44 1.09 1.17 1.09 2.02V16.5zm-5.5-7h2.25c.41 0 .75-.34.75-.75S13.16 8 12.75 8H10.5v1.5zm3 4.5h-3v1.5h3c.41 0 .75-.34.75-.75s-.34-.75-.75-.75z"/></svg>',
+    },
+    {
+      id: "twitter",
+      label: "Twitter (X)",
+      color: "#0F1419",
+      placeholder: "https://x.com/yourhandle",
+      icon: '<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg>',
+    },
+  ];
+
+  var SOCIAL_PLATFORM_MAP = {};
+  SOCIAL_PLATFORMS.forEach(function (sp) {
+    SOCIAL_PLATFORM_MAP[sp.id] = sp;
+  });
+
+  function normalizeSocialUrl(rawUrl) {
+    var s = String(rawUrl || "").trim();
+    if (!s) return "";
+    if (!/^https?:\/\//i.test(s)) s = "https://" + s;
+    try {
+      var parsed = new URL(s);
+      if (parsed.protocol !== "https:" && parsed.protocol !== "http:") return "";
+      return parsed.href.slice(0, 300);
+    } catch (e) {
+      return "";
+    }
+  }
+
+  function sanitizeSocialLinks(links) {
+    if (!Array.isArray(links)) return [];
+    var out = [];
+    var seen = new Set();
+    for (var i = 0; i < links.length && out.length < 10; i++) {
+      var item = links[i];
+      if (!item || typeof item !== "object") continue;
+      var pid = String(item.platform || "").toLowerCase().trim();
+      if (!SOCIAL_PLATFORM_MAP[pid]) continue;
+      var cleanUrl = normalizeSocialUrl(item.url);
+      if (!cleanUrl) continue;
+      var key = pid + "|" + cleanUrl.toLowerCase();
+      if (seen.has(key)) continue;
+      seen.add(key);
+      out.push({ platform: pid, url: cleanUrl });
+    }
+    return out;
+  }
+
+  function getGoogleAccountPhotoUrl(firebaseUser) {
+    if (!firebaseUser) return "";
+    if (firebaseUser.photoURL && /^https?:\/\//i.test(firebaseUser.photoURL)) {
+      return String(firebaseUser.photoURL).trim();
+    }
+    if (Array.isArray(firebaseUser.providerData)) {
+      for (var i = 0; i < firebaseUser.providerData.length; i++) {
+        var p = firebaseUser.providerData[i];
+        if (p && p.photoURL && /^https?:\/\//i.test(p.photoURL)) {
+          return String(p.photoURL).trim();
+        }
+      }
+    }
+    return "";
+  }
+
+  function getProfileShareUrl(username) {
+    var clean = normalizeUsername(username || "");
+    if (!clean) return "https://" + CANONICAL_HOST + "/";
+    if (typeof window !== "undefined" && window.location && (window.location.protocol === "https:" || window.location.protocol === "http:")) {
+      var host = window.location.hostname || "";
+      if (host === CANONICAL_HOST) {
+        return "https://" + CANONICAL_HOST + "/" + encodeURIComponent(clean);
+      }
+      return window.location.origin + "/" + encodeURIComponent(clean);
+    }
+    return "https://" + CANONICAL_HOST + "/" + encodeURIComponent(clean);
+  }
 
   var USERNAME_REGEX = /^[a-z0-9_]{3,20}$/;
 
@@ -173,6 +289,14 @@
         : online === false
         ? '<span class="presence-dot offline" title="Offline"></span>'
         : "";
+    var avatarTickHtml =
+      isAdminAvatar && (size === "xl" || size === "lg")
+        ? '<span class="avatar-blue-tick" title="Verified Official Administrator" aria-label="Verified Admin">' +
+          '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">' +
+          '<circle cx="12" cy="12" r="11" fill="#1877F2"/>' +
+          '<path d="M7.5 12.3l3 3 6-6.5" stroke="#FFFFFF" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/>' +
+          "</svg></span>"
+        : "";
     return (
       '<span class="avatar-wrap' + (isAdminAvatar ? " avatar-wrap-admin" : "") + '">' +
       '<span class="avatar avatar-' +
@@ -183,13 +307,14 @@
       '">' +
       inner +
       "</span>" +
+      avatarTickHtml +
       presenceHtml +
       "</span>"
     );
   }
 
   // ============================================================================
-  // OFFICIAL ADMIN PROFILE BADGE HELPERS
+  // OFFICIAL ADMIN BLUE VERIFIED TICK BADGE HELPERS
   // ============================================================================
   function isOfficialAdminUser(entity) {
     if (!entity) return false;
@@ -205,21 +330,22 @@
 
   function renderAdminBadgeHtml(variant) {
     var brandName = (siteConfigState && siteConfigState.siteName) || "KLORIX";
-    var shieldSvg =
-      '<svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">' +
-      '<path d="M12 2L4 5v6.09c0 5.05 3.41 9.76 8 10.91 4.59-1.15 8-5.86 8-10.91V5l-8-3zm-1.06 13.54L7.4 12l1.41-1.41 2.12 2.12 4.24-4.24 1.41 1.41-5.64 5.66z"/>' +
+    var blueTickSvg =
+      '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">' +
+      '<path d="M12 1.75l2.39 1.98 3.07-.37 1.16 2.86 2.86 1.16-.37 3.07L23.09 12l-1.98 2.39.37 3.07-2.86 1.16-1.16 2.86-3.07-.37L12 23.09l-2.39-1.98-3.07.37-1.16-2.86-2.86-1.16.37-3.07L.91 12l1.98-2.39-.37-3.07 2.86-1.16 1.16-2.86 3.07.37L12 1.75z" fill="#1877F2"/>' +
+      '<path d="M8.4 12.3l2.45 2.45 5.05-5.35" stroke="#FFFFFF" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"/>' +
       "</svg>";
 
     if (variant === "full") {
       return (
         '<span class="admin-verified-pill" title="Verified Official ' + escapeHtml(brandName) + ' Administrator">' +
-        shieldSvg +
+        blueTickSvg +
         "<span>Official Admin</span></span>"
       );
     }
     return (
-      '<span class="admin-verified-icon" title="Official ' + escapeHtml(brandName) + ' Administrator" aria-label="Official Admin">' +
-      shieldSvg +
+      '<span class="admin-verified-icon" title="Verified Official ' + escapeHtml(brandName) + ' Administrator" aria-label="Verified Admin">' +
+      blueTickSvg +
       "</span>"
     );
   }
@@ -1830,6 +1956,15 @@
     return new Date(ms).toLocaleDateString("en-US", { month: "long", year: "numeric" });
   }
 
+  function formatBirthDate(dateStr) {
+    var raw = String(dateStr || "").trim();
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(raw)) return "";
+    var parts = raw.split("-");
+    var d = new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2]));
+    if (isNaN(d.getTime())) return "";
+    return d.toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" });
+  }
+
   function formatMessageTime(ms) {
     if (!ms) return "";
     return new Date(ms).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
@@ -1959,12 +2094,40 @@
     return applyTheme(getCurrentTheme());
   }
 
-  // Hash Router Helpers
+  // Hash & Clean Username Path Router Helpers
+  var RESERVED_ROUTES = {
+    feed: true, explore: true, friends: true, messages: true, notifications: true,
+    profile: true, settings: true, admin: true, inspect: true, login: true,
+    register: true, forgot: true, index: true,
+  };
+
   function parseRoute() {
     var rawHash = (window.location.hash || "").replace(/^#\/?/, "");
     var parts = rawHash.split("?");
     var route = (parts[0] || "").trim().toLowerCase();
     var params = new URLSearchParams(parts[1] || window.location.search || "");
+
+    // Support #@username or #username shortcut
+    if (route && route.charAt(0) === "@") {
+      var hUser = normalizeUsername(route.slice(1));
+      if (hUser && !validateUsername(hUser)) {
+        params.set("u", hUser);
+        return { route: "profile", params: params };
+      }
+    }
+
+    // Support direct clean URL path: https://klorixcommunity.vercel.app/<username> or /@<username>
+    if (!route && typeof window !== "undefined" && window.location && window.location.pathname) {
+      var seg = window.location.pathname.replace(/^\/+|\/+$/g, "");
+      if (seg && seg.indexOf("/") === -1 && seg.indexOf(".") === -1) {
+        var cleanSeg = normalizeUsername(seg.replace(/^@/, ""));
+        if (cleanSeg && !RESERVED_ROUTES[cleanSeg] && !validateUsername(cleanSeg)) {
+          params.set("u", cleanSeg);
+          return { route: "profile", params: params };
+        }
+      }
+    }
+
     return { route: route, params: params };
   }
 
@@ -2090,6 +2253,12 @@
     eye: '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>',
     sparkles: '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z"/></svg>',
     code: '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>',
+    briefcase: '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="7" width="20" height="14" rx="2" ry="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/></svg>',
+    cake: '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-8a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8"/><path d="M4 16s.5-1 2-1 2.5 2 4 2 2.5-2 4-2 2.5 2 4 2 2-1 2-1"/><path d="M2 21h20"/><path d="M7 8v3"/><path d="M12 8v3"/><path d="M17 8v3"/><path d="M7 4h.01"/><path d="M12 4h.01"/><path d="M17 4h.01"/></svg>',
+    camera: '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>',
+    upload: '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>',
+    link: '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>',
+    plus: '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>',
     mail: '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>',
     google: '<svg width="18" height="18" viewBox="0 0 24 24"><path fill="#4285F4" d="M23.745 12.27c0-.79-.07-1.54-.19-2.27h-11.3v4.51h6.47c-.29 1.48-1.14 2.73-2.4 3.58v3h3.86c2.26-2.09 3.56-5.17 3.56-8.82z"/><path fill="#34A853" d="M12.255 24c3.24 0 5.95-1.08 7.93-2.91l-3.86-3c-1.08.72-2.45 1.16-4.07 1.16-3.13 0-5.78-2.11-6.73-4.96h-3.98v3.09C3.515 21.3 7.565 24 12.255 24z"/><path fill="#FBBC05" d="M5.525 14.29c-.25-.72-.38-1.49-.38-2.29s.14-1.57.38-2.29V6.62h-3.98a11.86 11.86 0 0 0 0 10.76l3.98-3.09z"/><path fill="#EA4335" d="M12.255 4.75c1.77 0 3.35.61 4.6 1.8l3.42-3.42C18.205 1.19 15.495 0 12.255 0c-4.69 0-8.74 2.7-10.71 6.62l3.98 3.09c.95-2.85 3.6-4.96 6.73-4.96z"/></svg>',
   };
@@ -2136,6 +2305,12 @@
     BOOTSTRAPPED_ADMIN_EMAIL: BOOTSTRAPPED_ADMIN_EMAIL,
     CANONICAL_HOST: CANONICAL_HOST,
     LIMITS: LIMITS,
+    SOCIAL_PLATFORMS: SOCIAL_PLATFORMS,
+    SOCIAL_PLATFORM_MAP: SOCIAL_PLATFORM_MAP,
+    normalizeSocialUrl: normalizeSocialUrl,
+    sanitizeSocialLinks: sanitizeSocialLinks,
+    getGoogleAccountPhotoUrl: getGoogleAccountPhotoUrl,
+    getProfileShareUrl: getProfileShareUrl,
     USERNAME_REGEX: USERNAME_REGEX,
     REPORT_REASONS: REPORT_REASONS,
     AVATAR_COLORS: AVATAR_COLORS,
@@ -2181,6 +2356,7 @@
     timestampToMs: timestampToMs,
     formatRelativeTime: formatRelativeTime,
     formatJoinDate: formatJoinDate,
+    formatBirthDate: formatBirthDate,
     formatMessageTime: formatMessageTime,
     formatPresenceLabel: formatPresenceLabel,
     isFileProtocol: isFileProtocol,

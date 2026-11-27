@@ -151,37 +151,274 @@
   font-weight: 600;
 }
 
-/* Avatar Color Picker Swatches */
-.color-swatches {
+/* Admin Cover Photo & Controls */
+.profile-cover.has-cover-photo {
+  height: 196px;
+  background: #0B0F0E;
+}
+
+.profile-cover.has-cover-photo::after {
+  background-image: linear-gradient(to top, rgba(0, 0, 0, 0.35), transparent 55%);
+  background-size: auto;
+  pointer-events: none;
+}
+
+.profile-cover-img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+  cursor: zoom-in;
+}
+
+.profile-cover-controls {
+  position: absolute;
+  bottom: 12px;
+  right: 14px;
+  z-index: 3;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.profile-cover-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 32px;
+  padding: 0 12px;
+  border-radius: var(--radius-full);
+  background: rgba(11, 15, 14, 0.68);
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  color: #FFFFFF;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  backdrop-filter: blur(8px);
+  transition: background-color 0.15s ease, transform 0.12s ease;
+}
+
+.profile-cover-btn:hover {
+  background: rgba(11, 15, 14, 0.86);
+  transform: translateY(-1px);
+}
+
+.profile-cover-btn-del {
+  padding: 0 9px;
+  background: rgba(185, 28, 28, 0.78);
+  border-color: rgba(254, 202, 202, 0.35);
+}
+
+.profile-cover-btn-del:hover {
+  background: rgba(185, 28, 28, 0.96);
+}
+
+/* Profile Social Media Chips */
+.profile-social-row {
   display: flex;
+  align-items: center;
+  flex-wrap: wrap;
   gap: 8px;
+  margin-top: 14px;
+}
+
+.profile-social-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 6px 12px;
+  border-radius: var(--radius-full);
+  background: var(--surface-subtle);
+  border: 1px solid var(--border);
+  color: var(--text);
+  font-size: 12.5px;
+  font-weight: 600;
+  text-decoration: none;
+  transition: border-color 0.15s ease, background-color 0.15s ease, transform 0.12s ease;
+}
+
+.profile-social-chip:hover {
+  border-color: var(--social-color, var(--accent));
+  background: var(--surface);
+  transform: translateY(-1px);
+}
+
+.profile-social-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--social-color, var(--accent));
+  flex-shrink: 0;
+}
+
+.profile-social-icon svg {
+  width: 15px;
+  height: 15px;
+  display: block;
+}
+
+/* Share Profile Modal Box */
+.share-profile-box {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px;
+  border-radius: var(--radius-md);
+  background: var(--surface-subtle);
+  border: 1px solid var(--border);
+}
+
+.share-profile-box .input {
+  border: none;
+  background: transparent;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 13px;
+  height: 36px;
+  flex: 1;
+  min-width: 0;
+}
+
+.share-profile-box .input:focus {
+  box-shadow: none;
+}
+
+/* Edit Profile & Settings Photo Uploader / Social Links Editor */
+.ep-form {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.ep-section {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 13px;
+  border-radius: var(--radius-md);
+  background: var(--surface-subtle);
+  border: 1px solid var(--border);
+}
+
+.ep-section-title {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.ep-avatar-editor {
+  display: flex;
+  align-items: center;
+  gap: 14px;
   flex-wrap: wrap;
 }
 
-.color-swatch {
-  width: 30px;
-  height: 30px;
-  border-radius: var(--radius-full);
-  border: 2px solid transparent;
-  padding: 0;
-  transition: transform 0.12s ease;
+.ep-photo-controls {
+  flex: 1;
+  min-width: 180px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
 }
 
-.color-swatch.active {
-  border-color: var(--text);
-  transform: scale(1.12);
+.ep-photo-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.ep-cover-preview {
+  height: 108px;
+  border-radius: var(--radius-sm);
+  border: 1px dashed var(--border);
+  background: linear-gradient(135deg, #042F2E 0%, #006A4E 55%, #1877F2 100%);
+  background-size: cover;
+  background-position: center;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: rgba(255, 255, 255, 0.9);
+  font-size: 12.5px;
+  font-weight: 600;
+  overflow: hidden;
+}
+
+.ep-two-col {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.ep-social-adder {
+  display: grid;
+  grid-template-columns: 142px minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: center;
+}
+
+.ep-social-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.ep-social-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 10px;
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  min-width: 0;
+}
+
+.ep-social-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12.5px;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.ep-social-badge svg {
+  width: 15px;
+  height: 15px;
+}
+
+.ep-social-url-text {
+  flex: 1;
+  min-width: 0;
+  font-size: 12px;
+  color: var(--text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.ep-social-del {
+  width: 28px;
+  height: 28px;
+  flex-shrink: 0;
+  color: var(--crimson);
 }
 
 /* ============================================================================
  * OFFICIAL ADMINISTRATOR DISTINGUISHED PROFILE STYLING
  * ============================================================================ */
 .profile-card-admin {
-  border-color: rgba(217, 119, 6, 0.42);
-  box-shadow: 0 8px 28px rgba(0, 106, 78, 0.12);
+  border-color: rgba(24, 119, 242, 0.38);
+  box-shadow: 0 8px 28px rgba(24, 119, 242, 0.12);
 }
 
 .profile-cover-admin {
-  background: linear-gradient(135deg, #042F2E 0%, #006A4E 48%, #92400E 100%);
+  background: linear-gradient(135deg, #042F2E 0%, #006A4E 48%, #1877F2 100%);
 }
 
 .profile-cover-emblem {
@@ -194,9 +431,9 @@
   gap: 6px;
   padding: 5px 12px;
   border-radius: var(--radius-full);
-  background: rgba(11, 15, 14, 0.48);
-  border: 1px solid rgba(251, 191, 36, 0.45);
-  color: #FEF3C7;
+  background: rgba(11, 15, 14, 0.56);
+  border: 1px solid rgba(96, 165, 250, 0.5);
+  color: #EFF6FF;
   font-size: 12px;
   font-weight: 700;
   letter-spacing: 0.02em;
@@ -204,17 +441,17 @@
 }
 
 .profile-avatar-ring-admin {
-  background: linear-gradient(135deg, #F59E0B, #006A4E, #FBBF24);
+  background: linear-gradient(135deg, #1877F2, #006A4E, #38BDF8);
   padding: 4px;
-  box-shadow: 0 4px 16px rgba(217, 119, 6, 0.35);
+  box-shadow: 0 4px 16px rgba(24, 119, 242, 0.32);
 }
 
 .admin-profile-banner {
   margin-top: 14px;
   padding: 12px 14px;
   border-radius: var(--radius-md);
-  background: linear-gradient(135deg, rgba(0, 106, 78, 0.09) 0%, rgba(217, 119, 6, 0.1) 100%);
-  border: 1px solid rgba(217, 119, 6, 0.28);
+  background: linear-gradient(135deg, rgba(24, 119, 242, 0.09) 0%, rgba(0, 106, 78, 0.08) 100%);
+  border: 1px solid rgba(24, 119, 242, 0.28);
   display: flex;
   align-items: flex-start;
   gap: 11px;
@@ -224,7 +461,7 @@
   width: 34px;
   height: 34px;
   border-radius: var(--radius-sm);
-  background: linear-gradient(135deg, #006A4E, #B45309);
+  background: linear-gradient(135deg, #1877F2, #006A4E);
   color: #FFFFFF;
   display: inline-flex;
   align-items: center;
@@ -275,4 +512,23 @@
   object-fit: cover;
   border: 1px solid var(--border);
   flex-shrink: 0;
+}
+
+@media (max-width: 640px) {
+  .profile-cover.has-cover-photo {
+    height: 160px;
+  }
+
+  .profile-cover-controls {
+    bottom: 10px;
+    right: 10px;
+  }
+
+  .ep-two-col {
+    grid-template-columns: 1fr;
+  }
+
+  .ep-social-adder {
+    grid-template-columns: 1fr;
+  }
 }

@@ -248,13 +248,22 @@
     var usernameErr = U.validateUsername(cleanUsername);
     if (usernameErr) throw new Error(usernameErr);
 
-    var urlErr = U.validateOptionalUrl(params.avatarUrl);
+    var rawAvatar = params.avatarUrl !== undefined ? params.avatarUrl : (currentProfile.avatarUrl || "");
+    var urlErr = U.validateOptionalUrl(rawAvatar);
     if (urlErr) throw new Error(urlErr);
 
-    var cleanBio = U.sanitizeText(params.bio, U.LIMITS.BIO_MAX);
-    var cleanLocation = U.sanitizeText(params.location, U.LIMITS.LOCATION_MAX);
-    var cleanAvatarUrl = String(params.avatarUrl || "").trim().slice(0, U.LIMITS.AVATAR_URL_MAX);
-    var cleanAvatarColor = String(params.avatarColor || "").trim().slice(0, 32) || currentProfile.avatarColor;
+    var cleanBio = U.sanitizeText(params.bio !== undefined ? params.bio : (currentProfile.bio || ""), U.LIMITS.BIO_MAX);
+    var cleanLocation = U.sanitizeText(params.location !== undefined ? params.location : (currentProfile.location || ""), U.LIMITS.LOCATION_MAX);
+    var cleanJobTitle = U.sanitizeText(params.jobTitle !== undefined ? params.jobTitle : (currentProfile.jobTitle || ""), U.LIMITS.JOB_TITLE_MAX);
+    var cleanWorkplace = U.sanitizeText(params.workplace !== undefined ? params.workplace : (currentProfile.workplace || ""), U.LIMITS.WORKPLACE_MAX);
+    var rawBirth = params.birthDate !== undefined ? String(params.birthDate || "").trim() : String(currentProfile.birthDate || "").trim();
+    var cleanBirthDate = /^\d{4}-\d{2}-\d{2}$/.test(rawBirth) ? rawBirth : "";
+    var cleanSocialLinks = params.socialLinks !== undefined
+      ? U.sanitizeSocialLinks(params.socialLinks)
+      : U.sanitizeSocialLinks(currentProfile.socialLinks || []);
+
+    var cleanAvatarUrl = String(rawAvatar || "").trim().slice(0, U.LIMITS.AVATAR_URL_MAX);
+    var cleanAvatarColor = String(params.avatarColor || "").trim().slice(0, 32) || currentProfile.avatarColor || U.pickAvatarColor(uid);
 
     var usernameChanged = cleanUsername !== currentProfile.username;
     if (usernameChanged) {
@@ -272,19 +281,62 @@
       batch.delete(HMM.db.collection("usernames").doc(currentProfile.username));
     }
 
-    batch.update(HMM.db.collection("users").doc(uid), {
+    var updatePayload = {
       name: cleanName,
       username: cleanUsername,
       bio: cleanBio,
       location: cleanLocation,
+      jobTitle: cleanJobTitle,
+      workplace: cleanWorkplace,
+      birthDate: cleanBirthDate,
+      socialLinks: cleanSocialLinks,
       avatarUrl: cleanAvatarUrl,
       avatarColor: cleanAvatarColor,
       visibility: params.visibility === "friends" ? "friends" : "public",
       friendRequestPref: params.friendRequestPref === "none" ? "none" : "everyone",
       updatedAt: HMM.serverTimestamp(),
-    });
+    };
+
+    if (params.coverPhotoUrl !== undefined) {
+      var rawCover = String(params.coverPhotoUrl || "").trim();
+      if (rawCover) {
+        var coverErr = U.validateOptionalUrl(rawCover);
+        if (coverErr) throw new Error("Invalid cover photo.");
+        if (rawCover.length > 350000) throw new Error("Cover photo is too large. Please choose a smaller image.");
+      }
+      updatePayload.coverPhotoUrl = rawCover;
+    }
+
+    batch.update(HMM.db.collection("users").doc(uid), updatePayload);
 
     await batch.commit();
+    return getUserProfile(uid);
+  }
+
+  async function updateAdminCoverPhoto(uid, coverPhotoUrl) {
+    var clean = String(coverPhotoUrl || "").trim();
+    if (clean) {
+      var err = U.validateOptionalUrl(clean);
+      if (err) throw new Error("Invalid cover photo.");
+      if (clean.length > 350000) throw new Error("Cover photo is too large. Please pick a smaller image.");
+    }
+    await HMM.db.collection("users").doc(uid).update({
+      coverPhotoUrl: clean,
+      updatedAt: HMM.serverTimestamp(),
+    });
+    return getUserProfile(uid);
+  }
+
+  async function updateUserAvatarUrl(uid, avatarUrl) {
+    var clean = String(avatarUrl || "").trim().slice(0, U.LIMITS.AVATAR_URL_MAX);
+    if (clean) {
+      var err = U.validateOptionalUrl(clean);
+      if (err) throw new Error(err);
+    }
+    await HMM.db.collection("users").doc(uid).update({
+      avatarUrl: clean,
+      updatedAt: HMM.serverTimestamp(),
+    });
     return getUserProfile(uid);
   }
 
@@ -606,6 +658,8 @@
     generateDefaultUsername: generateDefaultUsername,
     createUserProfile: createUserProfile,
     updateUserProfile: updateUserProfile,
+    updateAdminCoverPhoto: updateAdminCoverPhoto,
+    updateUserAvatarUrl: updateUserAvatarUrl,
     getSuggestedUsers: getSuggestedUsers,
     searchUsers: searchUsers,
     getUsersByIds: getUsersByIds,

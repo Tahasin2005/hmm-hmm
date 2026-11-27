@@ -401,7 +401,7 @@
       '<a href="#messages" class="icon-btn" data-hdr-nav="messages" title="Messages" aria-label="Messages">' + U.ICONS.message + '<span id="hdr-badge-messages" class="badge-dot hidden">0</span></a>' +
       '<a href="#notifications" class="icon-btn" data-hdr-nav="notifications" title="Notifications" aria-label="Notifications">' + U.ICONS.bell + '<span id="hdr-badge-notifs" class="badge-dot hidden">0</span></a>' +
       '<a href="#profile" class="header-user-btn" title="My profile" id="hdr-user-link">' +
-      U.renderAvatarHtml({ name: profile.name, avatarUrl: profile.avatarUrl, avatarColor: profile.avatarColor, size: "xs", isAdmin: isOfficialAdmin }) +
+      '<span id="hdr-profile-avatar">' + U.renderAvatarHtml({ name: profile.name, avatarUrl: profile.avatarUrl, avatarColor: profile.avatarColor, size: "xs", isAdmin: isOfficialAdmin }) + "</span>" +
       '<span class="header-user-name" id="hdr-profile-name">' + U.escapeHtml(profile.name) + "</span>" +
       (isOfficialAdmin ? '<span class="header-user-admin-badge">' + adminBadge + "</span>" : "") +
       "</a>" +
@@ -420,7 +420,7 @@
       '<span class="header-search-icon">' + U.ICONS.search + "</span>" +
       '<input id="drawer-search-input" type="search" placeholder="Search people, @usernames, #hashtags..." aria-label="Search" /></form>' +
       '<a href="#profile" class="sidebar-profile-mini" id="drawer-profile-card">' +
-      U.renderAvatarHtml({ name: profile.name, avatarUrl: profile.avatarUrl, avatarColor: profile.avatarColor, size: "md", online: true, isAdmin: isOfficialAdmin }) +
+      '<span id="drawer-profile-avatar">' + U.renderAvatarHtml({ name: profile.name, avatarUrl: profile.avatarUrl, avatarColor: profile.avatarColor, size: "md", online: true, isAdmin: isOfficialAdmin }) + "</span>" +
       '<div class="sidebar-profile-info"><strong class="name-with-badge"><span id="drawer-profile-name">' + U.escapeHtml(profile.name) + "</span>" + adminBadge + "</strong>" +
       '<span id="drawer-profile-handle">@' + U.escapeHtml(profile.username) + "</span></div></a>" +
       '<nav class="mobile-drawer-nav"><div class="nav-list">' + drawerNavHtml + "</div></nav>" +
@@ -433,7 +433,7 @@
       '<div class="app-shell" id="hmm-app-shell">' +
       '<aside class="left-sidebar">' +
       '<a href="#profile" class="sidebar-profile-mini" id="sidebar-profile-card">' +
-      U.renderAvatarHtml({ name: profile.name, avatarUrl: profile.avatarUrl, avatarColor: profile.avatarColor, size: "md", online: true, isAdmin: isOfficialAdmin }) +
+      '<span id="sidebar-profile-avatar">' + U.renderAvatarHtml({ name: profile.name, avatarUrl: profile.avatarUrl, avatarColor: profile.avatarColor, size: "md", online: true, isAdmin: isOfficialAdmin }) + "</span>" +
       '<div class="sidebar-profile-info"><strong class="name-with-badge"><span id="sidebar-profile-name">' + U.escapeHtml(profile.name) + "</span>" + adminBadge + "</strong>" +
       '<span id="sidebar-profile-handle">@' + U.escapeHtml(profile.username) + "</span></div></a>" +
       '<nav class="nav-card" aria-label="Main navigation"><div class="nav-list">' + leftNavHtml + "</div>" +
@@ -563,8 +563,14 @@
     var route = parsed.route;
     var params = parsed.params;
 
-    // Signed-out user -> show Login / Register / Forgot inside index.html
+    // Signed-out user -> remember deep-link target (e.g. /username or #profile?u=...) then show Auth
     if (!currentSession) {
+      if (route === "profile" && (params.get("u") || params.get("uid"))) {
+        try {
+          var targetQ = params.get("u") ? ("u=" + encodeURIComponent(params.get("u"))) : ("uid=" + encodeURIComponent(params.get("uid")));
+          sessionStorage.setItem("hmm_post_login_hash", "#profile?" + targetQ);
+        } catch (e) {}
+      }
       if (route === "register") A.renderAuthView(root, "register");
       else if (route === "forgot") A.renderAuthView(root, "forgot");
       else A.renderAuthView(root, "login");
@@ -614,6 +620,7 @@
           if (currentSession.isAdmin && fresh.role !== "admin") fresh.role = "admin";
           currentSession.profile = fresh;
           ctx.profile = fresh;
+          var isOffAdm = currentSession.isAdmin || U.isOfficialAdminUser(fresh);
           ["sidebar-profile-name", "drawer-profile-name", "hdr-profile-name"].forEach(function (id) {
             var el = document.getElementById(id);
             if (el) el.textContent = fresh.name;
@@ -622,6 +629,12 @@
             var el = document.getElementById(id);
             if (el) el.textContent = "@" + fresh.username;
           });
+          var hdrAv = document.getElementById("hdr-profile-avatar");
+          if (hdrAv) hdrAv.innerHTML = U.renderAvatarHtml({ name: fresh.name, avatarUrl: fresh.avatarUrl, avatarColor: fresh.avatarColor, size: "xs", isAdmin: isOffAdm });
+          var sideAv = document.getElementById("sidebar-profile-avatar");
+          if (sideAv) sideAv.innerHTML = U.renderAvatarHtml({ name: fresh.name, avatarUrl: fresh.avatarUrl, avatarColor: fresh.avatarColor, size: "md", online: true, isAdmin: isOffAdm });
+          var drwAv = document.getElementById("drawer-profile-avatar");
+          if (drwAv) drwAv.innerHTML = U.renderAvatarHtml({ name: fresh.name, avatarUrl: fresh.avatarUrl, avatarColor: fresh.avatarColor, size: "md", online: true, isAdmin: isOffAdm });
         }
         return currentSession.profile;
       },
@@ -710,6 +723,14 @@
       return;
     }
 
+    // Ensure the Firebase Auth JWT carries email_verified: true for Firestore Rules
+    try {
+      var tokenResult = await user.getIdTokenResult();
+      if (!tokenResult || !tokenResult.claims || tokenResult.claims.email_verified !== true) {
+        await user.getIdToken(true);
+      }
+    } catch (e) {}
+
     try {
       var profile = await A.getUserProfile(user.uid);
       if (!profile) {
@@ -740,6 +761,13 @@
         return;
       }
 
+      // Auto-restore Gmail / Google profile picture if avatarUrl is currently blank
+      var googlePhoto = U.getGoogleAccountPhotoUrl(user);
+      if ((!profile.avatarUrl || !String(profile.avatarUrl).trim()) && googlePhoto) {
+        profile.avatarUrl = googlePhoto;
+        A.updateUserAvatarUrl(user.uid, googlePhoto).catch(function () {});
+      }
+
       var isAdmin = await A.checkIsAdmin(user);
       if (isAdmin) {
         profile.role = "admin";
@@ -766,6 +794,18 @@
       }
       globalCleanups.push(attachPresence(user.uid));
       globalCleanups.push(subscribeToGlobalBadges(user.uid));
+
+      // Resume deep-linked shared profile URL if user just signed in
+      try {
+        var pendingHash = sessionStorage.getItem("hmm_post_login_hash");
+        if (pendingHash) {
+          sessionStorage.removeItem("hmm_post_login_hash");
+          if (window.location.hash !== pendingHash) {
+            window.location.hash = pendingHash;
+            return;
+          }
+        }
+      } catch (e) {}
 
       renderActiveRoute();
     } catch (err) {

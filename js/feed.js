@@ -1414,7 +1414,7 @@
             (ctx.isAdmin
               ? '<div class="announcement-admin-btns">' +
                 '<button type="button" class="btn btn-ghost btn-sm" data-edit-ann="' + U.escapeHtml(a.announcementId) + '">' + U.ICONS.edit + " Edit</button>" +
-                '<button type="button" class="btn btn-ghost btn-sm text-danger" data-del-ann="' + U.escapeHtml(a.announcementId) + '">' + U.ICONS.trash + "</button>" +
+                '<button type="button" class="btn btn-ghost btn-sm text-danger" data-del-ann="' + U.escapeHtml(a.announcementId) + '" aria-label="Delete announcement">' + U.ICONS.trash + "</button>" +
                 "</div>"
               : "") +
             "</div>" +
@@ -1424,11 +1424,16 @@
               name: a.authorName,
               avatarUrl: a.authorAvatarUrl,
               avatarColor: a.authorAvatarColor,
-              size: "xs",
+              size: "sm",
               isAdmin: true,
             }) +
-            "<strong>" + U.escapeHtml(a.authorName) + "</strong> " + U.renderAdminBadgeHtml("compact") +
-            "</a></div>" +
+            '<div class="announcement-author-meta">' +
+            '<span class="announcement-author-name">' +
+            "<strong>" + U.escapeHtml(a.authorName) + "</strong>" +
+            U.renderAdminBadgeHtml("compact") +
+            "</span>" +
+            '<span class="announcement-author-handle">@' + U.escapeHtml(a.authorUsername || "admin") + " · Official Admin</span>" +
+            "</div></a></div>" +
             '<h3 class="announcement-title">' + U.escapeHtml(a.title) + "</h3>" +
             '<div class="announcement-body">' + U.linkifyText(a.message) + "</div>" +
             (safeImg

@@ -9,16 +9,10 @@
 
   function mountSettingsView(ctx) {
     var cfg = HMM.siteConfig.get();
-    var selectedColor = ctx.profile.avatarColor || U.AVATAR_COLORS[0];
+    var googlePhotoUrl = U.getGoogleAccountPhotoUrl(ctx.user);
+    var draftAvatarUrl = ctx.profile.avatarUrl || googlePhotoUrl || "";
     var usesPassword = ctx.user.providerData.some(function (p) { return p.providerId === "password"; });
     var currentTheme = U.getCurrentTheme();
-
-    var swatchesHtml = U.AVATAR_COLORS.map(function (c) {
-      return (
-        '<button type="button" class="color-swatch ' + (c === selectedColor ? "active" : "") +
-        '" data-color="' + c + '" style="background:' + c + '" aria-label="Accent ' + c + '"></button>'
-      );
-    }).join("");
 
     ctx.mainEl.innerHTML =
       '<div class="page-header"><div><h1 class="page-title">Settings</h1>' +
@@ -26,18 +20,44 @@
       '<div class="settings-stack">' +
       '<section class="card"><h2 class="card-title" style="margin-bottom:14px;">Profile &amp; Privacy</h2>' +
       '<form id="settings-profile-form" class="auth-form">' +
+      '<div class="ep-avatar-editor" style="margin-bottom:6px;">' +
+      '<div id="set-avatar-preview">' +
+      U.renderAvatarHtml({ name: ctx.profile.name, avatarUrl: draftAvatarUrl, avatarColor: ctx.profile.avatarColor, size: "lg", isAdmin: ctx.isAdmin }) +
+      "</div>" +
+      '<div class="ep-photo-controls">' +
+      '<div class="ep-photo-actions">' +
+      '<label class="btn btn-primary btn-sm" for="set-avatar-file">' + U.ICONS.upload + " Upload Photo</label>" +
+      '<input id="set-avatar-file" type="file" accept="image/*" class="hidden" />' +
+      (googlePhotoUrl
+        ? '<button type="button" id="set-use-gmail-photo" class="btn btn-secondary btn-sm">' + U.ICONS.google + " Use Gmail Photo</button>"
+        : "") +
+      "</div>" +
+      '<span class="form-hint" id="set-avatar-status">' +
+      (draftAvatarUrl && draftAvatarUrl === googlePhotoUrl
+        ? "Using your Gmail profile picture automatically."
+        : draftAvatarUrl
+        ? "Custom profile picture active (auto-compressed)."
+        : "Upload a profile picture from your device.") +
+      "</span></div></div>" +
       '<div class="form-group"><label class="form-label" for="set-name">Full name</label>' +
       '<input id="set-name" class="form-input" type="text" required maxlength="' + U.LIMITS.NAME_MAX + '" value="' + U.escapeHtml(ctx.profile.name) + '" /></div>' +
       '<div class="form-group"><label class="form-label" for="set-username">Username (@)</label>' +
       '<input id="set-username" class="form-input" type="text" required maxlength="' + U.LIMITS.USERNAME_MAX + '" value="' + U.escapeHtml(ctx.profile.username) + '" />' +
-      '<span class="form-hint">Unique handle (3–20 lowercase letters, numbers, underscores).</span></div>' +
+      '<span class="form-hint">Your profile link: <strong>' + U.escapeHtml(U.getProfileShareUrl(ctx.profile.username)) + "</strong></span></div>" +
       '<div class="form-group"><label class="form-label" for="set-bio">Bio</label>' +
       '<textarea id="set-bio" class="form-textarea" maxlength="' + U.LIMITS.BIO_MAX + '">' + U.escapeHtml(ctx.profile.bio || "") + "</textarea></div>" +
+      '<div class="ep-two-col">' +
+      '<div class="form-group"><label class="form-label" for="set-job-title">Position / Job / Role</label>' +
+      '<input id="set-job-title" class="form-input" type="text" maxlength="' + U.LIMITS.JOB_TITLE_MAX + '" value="' + U.escapeHtml(ctx.profile.jobTitle || "") + '" placeholder="e.g. Founder, Developer, Student" /></div>' +
+      '<div class="form-group"><label class="form-label" for="set-workplace">Workplace / Organization</label>' +
+      '<input id="set-workplace" class="form-input" type="text" maxlength="' + U.LIMITS.WORKPLACE_MAX + '" value="' + U.escapeHtml(ctx.profile.workplace || "") + '" placeholder="e.g. KLORIX Tech" /></div>' +
+      "</div>" +
+      '<div class="ep-two-col">' +
+      '<div class="form-group"><label class="form-label" for="set-birthdate">Date of Birth</label>' +
+      '<input id="set-birthdate" class="form-input" type="date" value="' + U.escapeHtml(ctx.profile.birthDate || "") + '" /></div>' +
       '<div class="form-group"><label class="form-label" for="set-location">Location</label>' +
       '<input id="set-location" class="form-input" type="text" maxlength="' + U.LIMITS.LOCATION_MAX + '" value="' + U.escapeHtml(ctx.profile.location || "") + '" placeholder="Dhaka, Bangladesh" /></div>' +
-      '<div class="form-group"><label class="form-label" for="set-avatar">Profile picture URL (optional)</label>' +
-      '<input id="set-avatar" class="form-input" type="url" maxlength="' + U.LIMITS.AVATAR_URL_MAX + '" value="' + U.escapeHtml(ctx.profile.avatarUrl || "") + '" placeholder="https://example.com/avatar.jpg" /></div>' +
-      '<div class="form-group"><label class="form-label">Avatar color</label><div class="color-swatches" id="set-swatches">' + swatchesHtml + "</div></div>" +
+      "</div>" +
       '<div class="form-group"><label class="form-label" for="set-visibility">Profile visibility</label>' +
       '<select id="set-visibility" class="form-select">' +
       '<option value="public" ' + (ctx.profile.visibility === "public" ? "selected" : "") + ">Public — Anyone on " + U.escapeHtml(cfg.siteName) + " can find and view your profile</option>" +
@@ -127,14 +147,44 @@
       uInput.value = U.normalizeUsername(uInput.value);
     });
 
-    document.getElementById("set-swatches").addEventListener("click", function (e) {
-      var btn = e.target.closest(".color-swatch");
-      if (!btn) return;
-      selectedColor = btn.dataset.color;
-      document.querySelectorAll("#set-swatches .color-swatch").forEach(function (s) {
-        s.classList.toggle("active", s === btn);
+    function refreshSetAvatar(statusMsg) {
+      var prev = document.getElementById("set-avatar-preview");
+      if (prev) {
+        prev.innerHTML = U.renderAvatarHtml({
+          name: document.getElementById("set-name").value || ctx.profile.name,
+          avatarUrl: draftAvatarUrl,
+          avatarColor: ctx.profile.avatarColor,
+          size: "lg",
+          isAdmin: ctx.isAdmin,
+        });
+      }
+      var st = document.getElementById("set-avatar-status");
+      if (st && statusMsg) st.textContent = statusMsg;
+    }
+
+    var setAvatarFile = document.getElementById("set-avatar-file");
+    if (setAvatarFile) {
+      setAvatarFile.addEventListener("change", async function () {
+        var file = setAvatarFile.files && setAvatarFile.files[0];
+        if (!file) return;
+        try {
+          refreshSetAvatar("Compressing image...");
+          draftAvatarUrl = await U.compressImageFileToDataUrl(file, 240, 0.78, 95000);
+          refreshSetAvatar("Profile photo ready. Click Save profile settings to apply.");
+        } catch (err) {
+          U.showToast(err.message || "Could not process image.", "error");
+        }
+        setAvatarFile.value = "";
       });
-    });
+    }
+
+    var setGmailBtn = document.getElementById("set-use-gmail-photo");
+    if (setGmailBtn && googlePhotoUrl) {
+      setGmailBtn.addEventListener("click", function () {
+        draftAvatarUrl = googlePhotoUrl;
+        refreshSetAvatar("Gmail profile photo restored! Click Save profile settings to apply.");
+      });
+    }
 
     document.getElementById("settings-profile-form").addEventListener("submit", async function (e) {
       e.preventDefault();
@@ -147,9 +197,12 @@
           name: document.getElementById("set-name").value,
           username: document.getElementById("set-username").value,
           bio: document.getElementById("set-bio").value,
+          jobTitle: document.getElementById("set-job-title").value,
+          workplace: document.getElementById("set-workplace").value,
+          birthDate: document.getElementById("set-birthdate").value,
           location: document.getElementById("set-location").value,
-          avatarUrl: document.getElementById("set-avatar").value,
-          avatarColor: selectedColor,
+          avatarUrl: draftAvatarUrl || googlePhotoUrl || "",
+          avatarColor: ctx.profile.avatarColor,
           visibility: document.getElementById("set-visibility").value,
           friendRequestPref: document.getElementById("set-fr-pref").value,
         });
