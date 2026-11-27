@@ -1,6 +1,7 @@
 /**
- * HMM HMM — Real-Time Notifications View Controller (#notifications)
- * Classic script (works directly via file:// and HTTP/HTTPS).
+ * KLORIX (window.HMM) — Real-Time Notifications View Controller (#notifications)
+ * Supports reactions, comments, @mentions, post tags, friend requests, follows & messages.
+ * Classic script (works directly via file://, Vercel, and cPanel).
  */
 (function (HMM) {
   "use strict";
@@ -11,6 +12,8 @@
     switch (type) {
       case "like": return U.ICONS.heart;
       case "comment": return U.ICONS.comment;
+      case "mention": return U.ICONS.hash;
+      case "tag": return U.ICONS.tag;
       case "friend_request":
       case "friend_accepted":
       case "follow": return U.ICONS.users;
@@ -31,6 +34,8 @@
       case "follow": return "#profile?uid=" + encodeURIComponent(item.senderId);
       case "like":
       case "comment":
+      case "mention":
+      case "tag":
         return item.referenceId ? "#feed?post=" + encodeURIComponent(item.referenceId) : "#feed";
       default: return "#feed";
     }
@@ -42,7 +47,7 @@
 
     ctx.mainEl.innerHTML =
       '<div class="page-header"><div><h1 class="page-title">Notifications</h1>' +
-      '<p class="page-subtitle">Likes, comments, friend requests, follows, and messages.</p></div>' +
+      '<p class="page-subtitle">Reactions, comments, @mentions, post tags, friend requests, follows, and messages.</p></div>' +
       '<button type="button" id="btn-mark-all-read" class="btn btn-secondary btn-sm">Mark all read</button></div>' +
       '<div class="card" style="padding-bottom:0;"><div class="tabs" id="notif-tabs">' +
       '<button type="button" class="tab-btn active" data-filter="all">All <span class="tab-count" id="notif-cnt-all">0</span></button>' +
@@ -53,18 +58,21 @@
     var listEl = document.getElementById("notif-list");
 
     function render() {
-      var unreadCount = items.filter(function (n) { return !n.isRead; }).length;
-      document.getElementById("notif-cnt-all").textContent = String(items.length);
+      var nonBlocked = items.filter(function (n) {
+        return !(HMM.blocks && HMM.blocks.isEitherBlocked(n.senderId));
+      });
+      var unreadCount = nonBlocked.filter(function (n) { return !n.isRead; }).length;
+      document.getElementById("notif-cnt-all").textContent = String(nonBlocked.length);
       document.getElementById("notif-cnt-unread").textContent = String(unreadCount);
       var markAllBtn = document.getElementById("btn-mark-all-read");
       if (markAllBtn) markAllBtn.disabled = unreadCount === 0;
 
-      var visible = filter === "unread" ? items.filter(function (n) { return !n.isRead; }) : items;
+      var visible = filter === "unread" ? nonBlocked.filter(function (n) { return !n.isRead; }) : nonBlocked;
       if (visible.length === 0) {
         listEl.innerHTML =
           '<div class="empty-state"><div class="empty-state-icon">' + U.ICONS.bell + "</div>" +
           "<h3>" + (filter === "unread" ? "You're all caught up!" : "No notifications yet") + "</h3>" +
-          "<p>Activity from your posts, friends, and followers will show up here in real time.</p></div>";
+          "<p>Activity from your posts, @mentions, friends, and followers will show up here in real time.</p></div>";
         return;
       }
 
@@ -151,7 +159,12 @@
         }
       );
 
-    ctx.onCleanup(unsub);
+    var unsubBlocks = HMM.blocks.subscribe(render);
+
+    ctx.onCleanup(function () {
+      if (unsub) unsub();
+      if (unsubBlocks) unsubBlocks();
+    });
   }
 
   HMM.notifications = { mountView: mountNotificationsView };

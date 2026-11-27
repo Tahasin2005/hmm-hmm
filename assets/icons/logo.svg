@@ -1,6 +1,17 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="none">
-  <rect width="64" height="64" rx="16" fill="#006A4E"/>
-  <path d="M18 19V45M18 32H32M32 19V45" stroke="#FFFFFF" stroke-width="5.2" stroke-linecap="round" stroke-linejoin="round"/>
-  <path d="M40.5 25.5C43.5 27.6 45.2 29.8 45.2 32C45.2 34.2 43.5 36.4 40.5 38.5" stroke="#E6FFFFFF" stroke-width="4.2" stroke-linecap="round"/>
-  <circle cx="46" cy="20" r="4.5" fill="#E14245"/>
+  <defs>
+    <linearGradient id="klorixBg" x1="0" y1="0" x2="64" y2="64" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#0F172A"/>
+      <stop offset="55%" stop-color="#006A4E"/>
+      <stop offset="100%" stop-color="#0EA5E9"/>
+    </linearGradient>
+    <linearGradient id="klorixAccent" x1="28" y1="14" x2="50" y2="50" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#38BDF8"/>
+      <stop offset="100%" stop-color="#10B981"/>
+    </linearGradient>
+  </defs>
+  <rect width="64" height="64" rx="16" fill="url(#klorixBg)"/>
+  <path d="M18 16H26.5V48H18V16Z" fill="#FFFFFF"/>
+  <path d="M46.5 16L30 31.8L47.5 48H36.8L25.5 36.2V27.6L36.2 16H46.5Z" fill="url(#klorixAccent)"/>
+  <circle cx="48" cy="16" r="3.5" fill="#FFFFFF" fill-opacity="0.9"/>
 </svg>

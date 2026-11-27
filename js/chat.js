@@ -1,7 +1,7 @@
 /**
- * HMM HMM — Real-Time Text Messenger (1-to-1 Direct & Multi-Member Group Chat)
+ * KLORIX (window.HMM) — Real-Time Text Messenger (1-to-1 Direct & Multi-Member Group Chat)
  * 100% Text-Only (zero voice note or audio/video call code).
- * Powered by Firebase Realtime Database (RTDB) + Live Presence + Read Receipts.
+ * Includes Two-Way User Block/Unblock directly from Chat Header + Live Presence + Read Receipts.
  * Classic script (works directly via file://, Vercel, and cPanel).
  */
 (function (HMM) {
@@ -10,7 +10,7 @@
   var U = HMM.utils;
 
   // ============================================================================
-  // DIRECT 1-TO-1 TEXT MESSAGING (Bug-free atomic unread increment)
+  // DIRECT 1-TO-1 TEXT MESSAGING (With Two-Way Block Enforcement)
   // ============================================================================
   async function sendDirectMessage(params) {
     var sender = params.sender;
@@ -18,13 +18,19 @@
     if (!recipient || sender.uid === recipient.uid) {
       throw new Error("You cannot message yourself.");
     }
+    if (HMM.blocks && HMM.blocks.isBlockedByMe(recipient.uid)) {
+      throw new Error("You have blocked this user. Unblock them to send messages.");
+    }
+    if (HMM.blocks && HMM.blocks.hasBlockedMe(recipient.uid)) {
+      throw new Error("You cannot message this user.");
+    }
+
     var text = U.sanitizeText(params.rawText, U.LIMITS.MESSAGE_TEXT_MAX);
     if (!text) throw new Error("Message cannot be empty.");
 
     var chatId = U.getPairId(sender.uid, recipient.uid);
     var now = Date.now();
 
-    // 1. Ensure chat room exists with both participants BEFORE pushing message
     var chatUpdate = {
       type: "direct",
       lastMessage: text,
@@ -38,7 +44,6 @@
     chatUpdate["participantNames/" + recipient.uid] = recipient.name;
     await HMM.rtdb.ref("chats/" + chatId).update(chatUpdate);
 
-    // 2. Push the text message
     await HMM.rtdb.ref("messages/" + chatId).push({
       senderId: sender.uid,
       senderName: sender.name,
@@ -47,7 +52,6 @@
       read: false,
     });
 
-    // 3. Update both users' inbox summaries atomically (sender does NOT need read access to recipient's userChats!)
     await Promise.all([
       HMM.rtdb.ref("userChats/" + sender.uid + "/" + chatId).update({
         chatId: chatId,
@@ -99,7 +103,9 @@
   // ============================================================================
   async function createGroupChat(params) {
     var creator = params.creator;
-    var members = params.members || [];
+    var members = (params.members || []).filter(function (m) {
+      return m && m.uid && m.uid !== creator.uid && !(HMM.blocks && HMM.blocks.isEitherBlocked(m.uid));
+    });
     var groupName = U.sanitizeText(params.name, U.LIMITS.GROUP_NAME_MAX);
     if (!groupName || groupName.length < 2) {
       throw new Error("Group name must be at least 2 characters.");
@@ -116,9 +122,7 @@
     var avatarColor = params.avatarColor || U.pickAvatarColor(groupName);
     var groupId = U.generateId("grp");
     var now = Date.now();
-    var allMembers = [creator].concat(
-      members.filter(function (m) { return m && m.uid && m.uid !== creator.uid; })
-    );
+    var allMembers = [creator].concat(members);
 
     var participants = {};
     var participantNames = {};
@@ -129,7 +133,6 @@
 
     var introText = creator.name + ' created the group "' + groupName + '".';
 
-    // 1. Write group room metadata
     await HMM.rtdb.ref("chats/" + groupId).set({
       type: "group",
       name: groupName,
@@ -145,7 +148,6 @@
       lastSenderName: creator.name,
     });
 
-    // 2. Push initial welcome text message
     await HMM.rtdb.ref("messages/" + groupId).push({
       senderId: creator.uid,
       senderName: creator.name,
@@ -154,7 +156,6 @@
       read: true,
     });
 
-    // 3. Add group thread to every member's inbox
     await Promise.all(
       allMembers.map(function (m) {
         return HMM.rtdb.ref("userChats/" + m.uid + "/" + groupId).set({
@@ -273,7 +274,7 @@
   // ============================================================================
   async function mountChatView(ctx, params) {
     var chatList = [];
-    var activeThread = null; // { type: 'direct', chatId, recipient } OR { type: 'group', chatId, group }
+    var activeThread = null;
     var activePresence = { online: false, lastSeen: 0 };
     var activeMsgRef = null;
     var activeMsgCb = null;
@@ -341,10 +342,11 @@
         .map(function (c) {
           var isGroup = c.type === "group" || String(c.chatId || "").indexOf("grp_") === 0;
           var isActive = c.chatId === activeId;
-          var displayName = c.name || c.otherName || (isGroup ? "Group Chat" : "HMM Member");
+          var isBlocked = !isGroup && c.otherUid && HMM.blocks && HMM.blocks.isBlockedByMe(c.otherUid);
+          var displayName = c.name || c.otherName || (isGroup ? "Group Chat" : "KLORIX Member");
           var avatarUrl = c.avatarUrl || c.otherAvatarUrl || "";
           var avatarColor = c.avatarColor || c.otherAvatarColor || "#006A4E";
-          var p = !isGroup && c.otherUid ? presenceMap.get(c.otherUid) : null;
+          var p = !isGroup && c.otherUid && !isBlocked ? presenceMap.get(c.otherUid) : null;
           var previewPrefix =
             c.lastSenderId === ctx.user.uid
               ? "You: "
@@ -361,11 +363,12 @@
               avatarUrl: avatarUrl,
               avatarColor: avatarColor,
               size: "md",
-              online: isGroup ? undefined : p ? p.online : false,
+              online: isGroup || isBlocked ? undefined : p ? p.online : false,
             }) +
             '<div class="chat-thread-meta"><div class="chat-thread-top">' +
             '<span class="chat-thread-name">' + U.escapeHtml(displayName) +
-            (isGroup ? ' <span class="chat-group-tag">Group</span>' : "") + "</span>" +
+            (isGroup ? ' <span class="chat-group-tag">Group</span>' : "") +
+            (isBlocked ? ' <span class="chat-blocked-tag">Blocked</span>' : "") + "</span>" +
             '<span class="chat-thread-time">' + U.escapeHtml(U.formatRelativeTime(c.lastMessageTime)) + "</span></div>" +
             '<div class="chat-thread-bottom"><span class="chat-thread-preview">' +
             U.escapeHtml(previewPrefix + (c.lastMessage || "")) + "</span>" +
@@ -379,6 +382,11 @@
     function renderActiveHeaderPresence() {
       var el = document.getElementById("chat-active-presence");
       if (!el || !activeThread || activeThread.type !== "direct") return;
+      if (HMM.blocks && HMM.blocks.isEitherBlocked(activeThread.recipient.uid)) {
+        el.textContent = HMM.blocks.isBlockedByMe(activeThread.recipient.uid) ? "Blocked" : "Unavailable";
+        el.style.color = "var(--crimson)";
+        return;
+      }
       el.textContent = U.formatPresenceLabel(activePresence.online, activePresence.lastSeen);
       el.style.color = activePresence.online ? "var(--accent)" : "var(--text-muted)";
     }
@@ -460,33 +468,53 @@
       });
     }
 
-    function openDirectConversation(recipientProfile) {
-      if (!recipientProfile || recipientProfile.uid === ctx.user.uid) return;
-      var chatId = U.getPairId(ctx.user.uid, recipientProfile.uid);
-      activeThread = { type: "direct", chatId: chatId, recipient: recipientProfile };
-      chatShell.classList.add("thread-open");
-      renderThreadList();
-      detachActiveListeners();
+    function renderDirectComposerArea(recipientProfile) {
+      var footerEl = document.getElementById("chat-composer-slot");
+      var blockBtn = document.getElementById("btn-chat-block-toggle");
+      if (!footerEl) return;
 
-      var isAdm = U.isOfficialAdminUser(recipientProfile);
-      mainPaneEl.innerHTML =
-        '<div class="chat-main-header"><div class="chat-main-user">' +
-        '<button type="button" class="icon-btn chat-back-btn" id="chat-mobile-back" aria-label="Back to chats">' + U.ICONS.arrowLeft + "</button>" +
-        '<a href="#profile?uid=' + encodeURIComponent(recipientProfile.uid) + '">' +
-        U.renderAvatarHtml({ name: recipientProfile.name, avatarUrl: recipientProfile.avatarUrl, avatarColor: recipientProfile.avatarColor, size: "sm", isAdmin: isAdm }) +
-        '</a><div style="min-width:0;">' +
-        '<a href="#profile?uid=' + encodeURIComponent(recipientProfile.uid) + '" class="user-row-name">' +
-        U.escapeHtml(recipientProfile.name) + (isAdm ? " " + U.renderAdminBadgeHtml("compact") : "") + "</a>" +
-        '<div id="chat-active-presence" style="font-size:12px;color:var(--text-muted);">Checking status...</div></div></div>' +
-        '<a href="#profile?uid=' + encodeURIComponent(recipientProfile.uid) + '" class="btn btn-secondary btn-sm">Profile</a></div>' +
-        '<div class="chat-messages-scroll" id="chat-messages-scroll"><div class="chat-empty-pane"><div class="spinner"></div></div></div>' +
+      var iBlocked = HMM.blocks && HMM.blocks.isBlockedByMe(recipientProfile.uid);
+      var theyBlocked = HMM.blocks && HMM.blocks.hasBlockedMe(recipientProfile.uid);
+
+      if (blockBtn) {
+        blockBtn.innerHTML = U.ICONS.ban + (iBlocked ? "<span>Unblock</span>" : "<span>Block</span>");
+        blockBtn.className = iBlocked ? "btn btn-secondary btn-sm" : "btn btn-danger-soft btn-sm";
+      }
+
+      if (iBlocked) {
+        footerEl.innerHTML =
+          '<div class="chat-blocked-banner">' +
+          '<div class="chat-blocked-text">' + U.ICONS.ban +
+          "<span>You blocked <strong>" + U.escapeHtml(recipientProfile.name) + "</strong>. Unblock to resume chatting.</span></div>" +
+          '<button type="button" id="btn-chat-banner-unblock" class="btn btn-secondary btn-sm">Unblock</button></div>';
+        var unbBtn = document.getElementById("btn-chat-banner-unblock");
+        if (unbBtn) {
+          unbBtn.addEventListener("click", async function () {
+            unbBtn.disabled = true;
+            try {
+              await HMM.blocks.unblockUser(ctx.user.uid, recipientProfile.uid);
+              U.showToast("Unblocked " + recipientProfile.name + ".", "success");
+            } catch (err) {
+              U.showToast(U.getFriendlyErrorMessage(err), "error");
+              unbBtn.disabled = false;
+            }
+          });
+        }
+        return;
+      }
+
+      if (theyBlocked) {
+        footerEl.innerHTML =
+          '<div class="chat-blocked-banner">' +
+          '<div class="chat-blocked-text">' + U.ICONS.ban +
+          "<span>You cannot reply to this conversation right now.</span></div></div>";
+        return;
+      }
+
+      footerEl.innerHTML =
         '<form class="chat-composer" id="chat-send-form">' +
         '<input id="chat-message-input" type="text" maxlength="' + U.LIMITS.MESSAGE_TEXT_MAX + '" placeholder="Type a message..." autocomplete="off" required />' +
         '<button type="submit" id="chat-send-btn" class="btn btn-primary">' + U.ICONS.send + "<span>Send</span></button></form>";
-
-      document.getElementById("chat-mobile-back").addEventListener("click", function () {
-        chatShell.classList.remove("thread-open");
-      });
 
       document.getElementById("chat-send-form").addEventListener("submit", async function (e) {
         e.preventDefault();
@@ -506,6 +534,80 @@
           input.focus();
         }
       });
+    }
+
+    function openDirectConversation(recipientProfile) {
+      if (!recipientProfile || recipientProfile.uid === ctx.user.uid) return;
+      var chatId = U.getPairId(ctx.user.uid, recipientProfile.uid);
+      activeThread = { type: "direct", chatId: chatId, recipient: recipientProfile };
+      chatShell.classList.add("thread-open");
+      renderThreadList();
+      detachActiveListeners();
+
+      var isAdm = U.isOfficialAdminUser(recipientProfile);
+      var iBlocked = HMM.blocks && HMM.blocks.isBlockedByMe(recipientProfile.uid);
+
+      mainPaneEl.innerHTML =
+        '<div class="chat-main-header"><div class="chat-main-user">' +
+        '<button type="button" class="icon-btn chat-back-btn" id="chat-mobile-back" aria-label="Back to chats">' + U.ICONS.back + "</button>" +
+        '<a href="#profile?uid=' + encodeURIComponent(recipientProfile.uid) + '">' +
+        U.renderAvatarHtml({ name: recipientProfile.name, avatarUrl: recipientProfile.avatarUrl, avatarColor: recipientProfile.avatarColor, size: "sm", isAdmin: isAdm }) +
+        '</a><div style="min-width:0;">' +
+        '<a href="#profile?uid=' + encodeURIComponent(recipientProfile.uid) + '" class="user-row-name">' +
+        U.escapeHtml(recipientProfile.name) + (isAdm ? " " + U.renderAdminBadgeHtml("compact") : "") + "</a>" +
+        '<div id="chat-active-presence" style="font-size:12px;color:var(--text-muted);">Checking status...</div></div></div>' +
+        '<div class="chat-main-actions">' +
+        '<button type="button" id="btn-chat-block-toggle" class="btn ' + (iBlocked ? "btn-secondary" : "btn-danger-soft") + ' btn-sm">' +
+        U.ICONS.ban + "<span>" + (iBlocked ? "Unblock" : "Block") + "</span></button>" +
+        '<a href="#profile?uid=' + encodeURIComponent(recipientProfile.uid) + '" class="btn btn-secondary btn-sm">Profile</a>' +
+        "</div></div>" +
+        '<div class="chat-messages-scroll" id="chat-messages-scroll"><div class="chat-empty-pane"><div class="spinner"></div></div></div>' +
+        '<div id="chat-composer-slot"></div>';
+
+      document.getElementById("chat-mobile-back").addEventListener("click", function () {
+        chatShell.classList.remove("thread-open");
+      });
+
+      document.getElementById("btn-chat-block-toggle").addEventListener("click", async function () {
+        var currentlyBlocked = HMM.blocks && HMM.blocks.isBlockedByMe(recipientProfile.uid);
+        if (currentlyBlocked) {
+          try {
+            await HMM.blocks.unblockUser(ctx.user.uid, recipientProfile.uid);
+            U.showToast("Unblocked " + recipientProfile.name + ".", "success");
+          } catch (err) {
+            U.showToast(U.getFriendlyErrorMessage(err), "error");
+          }
+          return;
+        }
+        U.openModal(
+          "Block " + recipientProfile.name + "?",
+          '<p style="font-size:14px;line-height:1.6;">Blocking <strong>' + U.escapeHtml(recipientProfile.name) + "</strong> (@" +
+            U.escapeHtml(recipientProfile.username) + ") will immediately:</p>" +
+            '<ul style="font-size:13.5px;color:var(--text-muted);margin:10px 0 16px 18px;line-height:1.6;">' +
+            "<li>Stop messages between you and this user</li>" +
+            "<li>Hide each other's posts, comments, and profiles</li>" +
+            "<li>Remove friendship, pending requests, and follows</li></ul>" +
+            '<div style="display:flex;justify-content:flex-end;gap:8px;">' +
+            '<button type="button" id="blk-cancel" class="btn btn-secondary">Cancel</button>' +
+            '<button type="button" id="blk-confirm" class="btn btn-danger">' + U.ICONS.ban + " Block User</button></div>",
+          function (body, close) {
+            body.querySelector("#blk-cancel").addEventListener("click", close);
+            body.querySelector("#blk-confirm").addEventListener("click", async function (ev) {
+              ev.currentTarget.disabled = true;
+              try {
+                await HMM.blocks.blockUser(ctx.profile, recipientProfile);
+                U.showToast("Blocked " + recipientProfile.name + ".", "success");
+                close();
+              } catch (err) {
+                U.showToast(U.getFriendlyErrorMessage(err), "error");
+                ev.currentTarget.disabled = false;
+              }
+            });
+          }
+        );
+      });
+
+      renderDirectComposerArea(recipientProfile);
 
       activePresRef = HMM.rtdb.ref("presence/" + recipientProfile.uid);
       activePresCb = function (snap) {
@@ -545,7 +647,7 @@
 
       mainPaneEl.innerHTML =
         '<div class="chat-main-header"><div class="chat-main-user">' +
-        '<button type="button" class="icon-btn chat-back-btn" id="chat-mobile-back" aria-label="Back to chats">' + U.ICONS.arrowLeft + "</button>" +
+        '<button type="button" class="icon-btn chat-back-btn" id="chat-mobile-back" aria-label="Back to chats">' + U.ICONS.back + "</button>" +
         U.renderAvatarHtml({ name: groupData.name, avatarUrl: groupData.avatarUrl, avatarColor: groupData.avatarColor, size: "sm" }) +
         '<div style="min-width:0;">' +
         '<div class="user-row-name">' + U.escapeHtml(groupData.name || "Group Chat") + ' <span class="chat-group-tag">Group</span></div>' +
@@ -566,7 +668,7 @@
           '<div style="max-height:340px;overflow-y:auto;">' +
           memberUids
             .map(function (uid) {
-              var n = names[uid] || "HMM Member";
+              var n = names[uid] || "KLORIX Member";
               return (
                 '<div class="user-row"><a href="#profile?uid=' + encodeURIComponent(uid) + '" class="user-row-left" data-close-m="1">' +
                 U.renderAvatarHtml({ name: n, avatarColor: U.pickAvatarColor(uid), size: "sm" }) +
@@ -605,7 +707,6 @@
       attachMessageStream(chatId, true);
     }
 
-    // Create Group Chat Modal
     function openCreateGroupModal() {
       var selectedUsers = new Map();
       var selectedColor = U.AVATAR_COLORS[0];
@@ -672,11 +773,14 @@
           }
 
           function renderCandidates(users) {
-            if (users.length === 0) {
+            var clean = (users || []).filter(function (u) {
+              return !(HMM.blocks && HMM.blocks.isEitherBlocked(u.uid));
+            });
+            if (clean.length === 0) {
               listEl.innerHTML = '<p class="text-muted" style="font-size:13px;padding:8px;">No matching users found.</p>';
               return;
             }
-            listEl.innerHTML = users
+            listEl.innerHTML = clean
               .map(function (u) {
                 var checked = selectedUsers.has(u.uid);
                 return (
@@ -732,7 +836,6 @@
 
           body.querySelector("#grp-cancel").addEventListener("click", close);
 
-          // Load friends + suggested users
           HMM.authService.getSuggestedUsers(ctx.user.uid, 30).then(function (list) {
             allCandidates = list;
             renderCandidates(list);
@@ -798,7 +901,7 @@
       var uid = btn.dataset.openUid;
       var fullProfile = (await HMM.authService.getUserProfile(uid)) || {
         uid: uid,
-        name: (summary && (summary.name || summary.otherName)) || "HMM Member",
+        name: (summary && (summary.name || summary.otherName)) || "KLORIX Member",
         username: (summary && summary.otherUsername) || "member",
         avatarUrl: (summary && (summary.avatarUrl || summary.otherAvatarUrl)) || "",
         avatarColor: (summary && (summary.avatarColor || summary.otherAvatarColor)) || "#006A4E",
@@ -820,11 +923,14 @@
           var inputEl = body.querySelector("#new-chat-search");
 
           function renderPickList(users) {
-            if (users.length === 0) {
+            var clean = (users || []).filter(function (u) {
+              return !(HMM.blocks && HMM.blocks.isEitherBlocked(u.uid));
+            });
+            if (clean.length === 0) {
               resultsEl.innerHTML = '<p class="text-muted" style="font-size:13px;">No users found.</p>';
               return;
             }
-            resultsEl.innerHTML = users
+            resultsEl.innerHTML = clean
               .map(function (u) {
                 var isAdm = U.isOfficialAdminUser(u);
                 return (
@@ -840,7 +946,7 @@
 
             resultsEl.querySelectorAll("[data-pick-uid]").forEach(function (btn) {
               btn.addEventListener("click", function () {
-                var chosen = users.find(function (u) { return u.uid === btn.dataset.pickUid; });
+                var chosen = clean.find(function (u) { return u.uid === btn.dataset.pickUid; });
                 if (chosen) {
                   close();
                   openDirectConversation(chosen);
@@ -884,8 +990,17 @@
         "</p></div>";
     });
 
+    var unsubBlocks = HMM.blocks.subscribe(function () {
+      renderThreadList();
+      if (activeThread && activeThread.type === "direct") {
+        renderDirectComposerArea(activeThread.recipient);
+        renderActiveHeaderPresence();
+      }
+    });
+
     ctx.onCleanup(function () {
       myChatsRef.off("value", myChatsCb);
+      if (unsubBlocks) unsubBlocks();
       detachActiveListeners();
       presenceListeners.forEach(function (entry) {
         entry.ref.off("value", entry.cb);

@@ -1,6 +1,6 @@
 /**
- * HMM HMM — Friends, Friend Requests & Follow/Unfollow Services + Friends View
- * Classic script (works directly via file:// and HTTP/HTTPS).
+ * KLORIX — Friends, Friend Requests & Follow/Unfollow Services + Friends View
+ * Classic script (works directly via file://, Vercel, and cPanel).
  */
 (function (HMM) {
   "use strict";
@@ -117,6 +117,9 @@
 
   async function sendFriendRequest(me, target) {
     if (me.uid === target.uid) throw new Error("You cannot send a friend request to yourself.");
+    if (HMM.blocks && HMM.blocks.isEitherBlocked(target.uid)) {
+      throw new Error("You cannot send a friend request to this user.");
+    }
     if (target.friendRequestPref === "none") {
       throw new Error("This user is not accepting friend requests right now.");
     }
@@ -216,6 +219,9 @@
 
   async function followUser(me, targetUid) {
     if (me.uid === targetUid) throw new Error("You cannot follow yourself.");
+    if (HMM.blocks && HMM.blocks.isEitherBlocked(targetUid)) {
+      throw new Error("You cannot follow this user.");
+    }
     var followId = U.getFollowId(me.uid, targetUid);
     var existing = await HMM.db.collection("follows").doc(followId).get();
     if (existing.exists) return;
@@ -289,24 +295,35 @@
       var container = document.getElementById("friends-list-container");
       if (!container) return;
 
-      document.getElementById("cnt-friends").textContent = String(socialState.friendships.length);
-      document.getElementById("cnt-incoming").textContent = String(socialState.incomingRequests.length);
-      document.getElementById("cnt-outgoing").textContent = String(socialState.outgoingRequests.length);
-      document.getElementById("cnt-following").textContent = String(socialState.following.length);
-      document.getElementById("cnt-followers").textContent = String(socialState.followers.length);
+      function notBlocked(id) {
+        return !(HMM.blocks && HMM.blocks.isEitherBlocked(id));
+      }
+
+      var friendIds = Array.from(socialState.friendUids).filter(notBlocked);
+      var incomingIds = socialState.incomingRequests.map(function (r) { return r.senderId; }).filter(notBlocked);
+      var outgoingIds = socialState.outgoingRequests.map(function (r) { return r.receiverId; }).filter(notBlocked);
+      var followingIds = socialState.following.map(function (f) { return f.followingId; }).filter(notBlocked);
+      var followerIds = socialState.followers.map(function (f) { return f.followerId; }).filter(notBlocked);
+
+      document.getElementById("cnt-friends").textContent = String(friendIds.length);
+      document.getElementById("cnt-incoming").textContent = String(incomingIds.length);
+      document.getElementById("cnt-outgoing").textContent = String(outgoingIds.length);
+      document.getElementById("cnt-following").textContent = String(followingIds.length);
+      document.getElementById("cnt-followers").textContent = String(followerIds.length);
 
       var uids = [];
-      if (activeTab === "friends") uids = Array.from(socialState.friendUids);
-      else if (activeTab === "incoming") uids = socialState.incomingRequests.map(function (r) { return r.senderId; });
-      else if (activeTab === "outgoing") uids = socialState.outgoingRequests.map(function (r) { return r.receiverId; });
-      else if (activeTab === "following") uids = socialState.following.map(function (f) { return f.followingId; });
-      else if (activeTab === "followers") uids = socialState.followers.map(function (f) { return f.followerId; });
+      if (activeTab === "friends") uids = friendIds;
+      else if (activeTab === "incoming") uids = incomingIds;
+      else if (activeTab === "outgoing") uids = outgoingIds;
+      else if (activeTab === "following") uids = followingIds;
+      else if (activeTab === "followers") uids = followerIds;
 
       await loadMissingProfiles(uids);
 
+      var siteName = (HMM.siteConfig && HMM.siteConfig.get().siteName) || "KLORIX";
       if (uids.length === 0) {
         var emptyMap = {
-          friends: ["No friends yet", "Explore HMM HMM and send friend requests to connect."],
+          friends: ["No friends yet", "Explore " + U.escapeHtml(siteName) + " and send friend requests to connect."],
           incoming: ["No pending requests", "When someone sends you a friend request, it will appear here."],
           outgoing: ["No sent requests", "Friend requests you send will appear here until accepted."],
           following: ["Not following anyone yet", "Follow people on Explore to keep up with their updates."],
@@ -324,7 +341,7 @@
         .map(function (uid) {
           var u = profileCache.get(uid) || {
             uid: uid,
-            name: "HMM Member",
+            name: "KLORIX Member",
             username: "member",
             avatarUrl: "",
             avatarColor: "#006A4E",
@@ -414,6 +431,12 @@
       renderTab();
     });
     ctx.onCleanup(unsub);
+
+    if (HMM.blocks && HMM.blocks.subscribe) {
+      ctx.onCleanup(HMM.blocks.subscribe(function () {
+        renderTab();
+      }));
+    }
   }
 
   HMM.friends = {

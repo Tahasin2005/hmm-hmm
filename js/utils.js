@@ -1,12 +1,14 @@
 /**
- * HMM HMM — Shared Utilities, Reactions, Smart Link Previews, Dynamic Site Config,
- * Admin Badge Helpers, Validation, Sanitization, Icons, Theme, Routing & Modals
+ * KLORIX (window.HMM) — Shared Utilities, Reactions, Smart Link & Safe Embed Engine,
+ * @Mentions & #Hashtags, Two-Way User Blocks, Admin Announcements, Feed Promos,
+ * Dynamic Site Config, Admin Badge Helpers, Validation, Sanitization, Icons, Theme, Routing & Modals.
  * Classic script (works directly via file://, Vercel static deploy, and cPanel).
  */
 (function (HMM) {
   "use strict";
 
   var BOOTSTRAPPED_ADMIN_EMAIL = "tahasinahammed58@gmail.com";
+  var CANONICAL_HOST = "klorixcommunity.vercel.app";
 
   var LIMITS = {
     NAME_MIN: 1,
@@ -21,6 +23,8 @@
     MESSAGE_TEXT_MAX: 2000,
     REPORT_DETAILS_MAX: 500,
     GROUP_NAME_MAX: 60,
+    ANNOUNCEMENT_TITLE_MAX: 140,
+    ANNOUNCEMENT_MESSAGE_MAX: 2000,
   };
 
   var USERNAME_REGEX = /^[a-z0-9_]{3,20}$/;
@@ -108,7 +112,8 @@
   function validateOptionalUrl(url) {
     var trimmed = String(url == null ? "" : url).trim();
     if (!trimmed) return null;
-    if (trimmed.indexOf("data:image/") === 0 && trimmed.length <= 250000) return null;
+    if (trimmed.indexOf("data:image/") === 0 && trimmed.length <= 350000) return null;
+    if (/^assets\/[a-zA-Z0-9_./-]+$/.test(trimmed)) return null;
     if (trimmed.length > LIMITS.AVATAR_URL_MAX) return "URL is too long.";
     try {
       var parsed = new URL(trimmed);
@@ -124,12 +129,13 @@
   function safeAvatarUrl(url) {
     var trimmed = String(url == null ? "" : url).trim();
     if (!trimmed) return "";
-    if (trimmed.indexOf("data:image/") === 0 && trimmed.length <= 250000) return trimmed;
+    if (trimmed.indexOf("data:image/") === 0 && trimmed.length <= 350000) return trimmed;
+    if (/^assets\/[a-zA-Z0-9_./-]+$/.test(trimmed)) return trimmed;
     return validateOptionalUrl(trimmed) === null ? trimmed : "";
   }
 
   function pickAvatarColor(seed) {
-    var s = String(seed || "hmm");
+    var s = String(seed || "klorix");
     var hash = 0;
     for (var i = 0; i < s.length; i++) {
       hash = (hash * 31 + s.charCodeAt(i)) >>> 0;
@@ -139,7 +145,7 @@
 
   function getInitials(name) {
     var parts = String(name || "").trim().split(/\s+/).filter(Boolean);
-    if (parts.length === 0) return "HH";
+    if (parts.length === 0) return "KX";
     if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
     return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
   }
@@ -152,8 +158,8 @@
     var online = opts.online;
     var isAdminAvatar = Boolean(opts.isAdmin);
     var safeUrl = safeAvatarUrl(avatarUrl);
-    var bg = escapeHtml(avatarColor || pickAvatarColor(name || "hmm"));
-    var initials = escapeHtml(getInitials(name || "HMM"));
+    var bg = escapeHtml(avatarColor || pickAvatarColor(name || "klorix"));
+    var initials = escapeHtml(getInitials(name || "KLORIX"));
     var inner = safeUrl
       ? '<img src="' +
         escapeHtml(safeUrl) +
@@ -198,6 +204,7 @@
   }
 
   function renderAdminBadgeHtml(variant) {
+    var brandName = (siteConfigState && siteConfigState.siteName) || "KLORIX";
     var shieldSvg =
       '<svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">' +
       '<path d="M12 2L4 5v6.09c0 5.05 3.41 9.76 8 10.91 4.59-1.15 8-5.86 8-10.91V5l-8-3zm-1.06 13.54L7.4 12l1.41-1.41 2.12 2.12 4.24-4.24 1.41 1.41-5.64 5.66z"/>' +
@@ -205,39 +212,39 @@
 
     if (variant === "full") {
       return (
-        '<span class="admin-verified-pill" title="Verified Official HMM HMM Administrator">' +
+        '<span class="admin-verified-pill" title="Verified Official ' + escapeHtml(brandName) + ' Administrator">' +
         shieldSvg +
         "<span>Official Admin</span></span>"
       );
     }
     return (
-      '<span class="admin-verified-icon" title="Official HMM HMM Administrator" aria-label="Official Admin">' +
+      '<span class="admin-verified-icon" title="Official ' + escapeHtml(brandName) + ' Administrator" aria-label="Official Admin">' +
       shieldSvg +
       "</span>"
     );
   }
 
   // ============================================================================
-  // IMAGE FILE COMPRESSION (For Logo, Favicon, Group Avatar — Zero Storage Needed)
+  // IMAGE FILE COMPRESSION (Logo, Favicon, Group Avatar, Announcements, Feed Ads)
   // ============================================================================
-  function compressImageFileToDataUrl(file, maxDim, quality) {
+  function compressImageFileToDataUrl(file, maxDim, quality, maxDataChars) {
     return new Promise(function (resolve, reject) {
       if (!file || !file.type || file.type.indexOf("image/") !== 0) {
         reject(new Error("Please select a valid image file (PNG, JPG, WebP, or SVG)."));
         return;
       }
-      if (file.size > 5 * 1024 * 1024) {
-        reject(new Error("Image file is too large. Please choose an image under 5 MB."));
+      if (file.size > 6 * 1024 * 1024) {
+        reject(new Error("Image file is too large. Please choose an image under 6 MB."));
         return;
       }
+      var maxLen = maxDataChars || (maxDim && maxDim >= 600 ? 310000 : 140000);
       var reader = new FileReader();
       reader.onerror = function () {
         reject(new Error("Could not read the selected image file."));
       };
       reader.onload = function (ev) {
         var src = ev.target.result;
-        // Preserve compact SVGs directly
-        if (file.type === "image/svg+xml" && src.length <= 120000) {
+        if (file.type === "image/svg+xml" && src.length <= maxLen) {
           resolve(src);
           return;
         }
@@ -260,10 +267,13 @@
           var ctx2d = canvas.getContext("2d");
           ctx2d.clearRect(0, 0, w, h);
           ctx2d.drawImage(img, 0, 0, w, h);
-          var mime = file.type === "image/png" ? "image/png" : "image/jpeg";
-          var out = canvas.toDataURL(mime, quality || 0.85);
-          if (out.length > 140000) {
+          var mime = file.type === "image/png" && limit <= 320 ? "image/png" : "image/jpeg";
+          var out = canvas.toDataURL(mime, quality || 0.84);
+          if (out.length > maxLen) {
             out = canvas.toDataURL("image/jpeg", 0.72);
+          }
+          if (out.length > maxLen) {
+            out = canvas.toDataURL("image/jpeg", 0.58);
           }
           resolve(out);
         };
@@ -274,11 +284,299 @@
   }
 
   // ============================================================================
-  // SMART LINK & MEDIA PREVIEW ENGINE
+  // @MENTIONS & #HASHTAGS EXTRACTION + RICH TEXT LINKIFIER
   // ============================================================================
   var URL_REGEX = /https?:\/\/[^\s<>"'`]+/gi;
+  var MENTION_REGEX = /(^|[^a-zA-Z0-9_])@([a-z0-9_]{3,20})\b/g;
+  var HASHTAG_REGEX = /(^|[^\w#\u0980-\u09FF])#([a-zA-Z0-9_\u0980-\u09FF]{2,40})/g;
+
+  function extractMentions(rawText) {
+    var str = String(rawText || "");
+    var found = [];
+    var seen = new Set();
+    // Strip URLs first so @ in URLs aren't treated as mentions
+    var cleaned = str.replace(URL_REGEX, " ");
+    MENTION_REGEX.lastIndex = 0;
+    var m;
+    while ((m = MENTION_REGEX.exec(cleaned)) !== null) {
+      var uname = m[2].toLowerCase();
+      if (!seen.has(uname) && found.length < 15) {
+        seen.add(uname);
+        found.push(uname);
+      }
+    }
+    return found;
+  }
+
+  function extractHashtags(rawText) {
+    var str = String(rawText || "");
+    var found = [];
+    var seen = new Set();
+    var cleaned = str.replace(URL_REGEX, " ");
+    HASHTAG_REGEX.lastIndex = 0;
+    var m;
+    while ((m = HASHTAG_REGEX.exec(cleaned)) !== null) {
+      var tag = m[2].toLowerCase();
+      if (!seen.has(tag) && found.length < 15) {
+        seen.add(tag);
+        found.push(tag);
+      }
+    }
+    return found;
+  }
+
+  function formatNonUrlChunk(chunk) {
+    if (!chunk) return "";
+    // Tokenize mentions and hashtags in a single pass on plain text
+    var tokenRegex = /(^|[^a-zA-Z0-9_])@([a-z0-9_]{3,20})\b|(^|[^\w#\u0980-\u09FF])#([a-zA-Z0-9_\u0980-\u09FF]{2,40})/g;
+    var out = "";
+    var last = 0;
+    var m;
+    while ((m = tokenRegex.exec(chunk)) !== null) {
+      out += escapeHtml(chunk.slice(last, m.index));
+      if (m[2]) {
+        // @mention
+        var preM = m[1] || "";
+        var uname = m[2].toLowerCase();
+        out +=
+          escapeHtml(preM) +
+          '<a href="#profile?u=' +
+          encodeURIComponent(uname) +
+          '" class="mention-link" data-mention="' +
+          escapeHtml(uname) +
+          '">@' +
+          escapeHtml(uname) +
+          "</a>";
+      } else if (m[4]) {
+        // #hashtag
+        var preH = m[3] || "";
+        var rawTag = m[4];
+        out +=
+          escapeHtml(preH) +
+          '<a href="#explore?q=' +
+          encodeURIComponent("#" + rawTag.toLowerCase()) +
+          '" class="hashtag-link" data-hashtag="' +
+          escapeHtml(rawTag.toLowerCase()) +
+          '">#' +
+          escapeHtml(rawTag) +
+          "</a>";
+      }
+      last = m.index + m[0].length;
+    }
+    out += escapeHtml(chunk.slice(last));
+    return out;
+  }
+
+  // ============================================================================
+  // SAFE EMBED PARSER & NATIVE PLAYER (YouTube, Facebook, Vimeo — Strict Whitelist)
+  // ============================================================================
+  function extractIframeSrc(rawInput) {
+    var str = String(rawInput || "").trim();
+    if (!str) return { src: "", width: 0, height: 0 };
+    if (str.indexOf("<") !== -1 && /<iframe\b/i.test(str)) {
+      var srcMatch = str.match(/\bsrc\s*=\s*(?:"([^"]+)"|'([^']+)'|([^\s>]+))/i);
+      var wMatch = str.match(/\bwidth\s*=\s*"?(\d{2,4})"?/i);
+      var hMatch = str.match(/\bheight\s*=\s*"?(\d{2,4})"?/i);
+      var rawSrc = srcMatch ? (srcMatch[1] || srcMatch[2] || srcMatch[3] || "") : "";
+      rawSrc = rawSrc.replace(/&amp;/g, "&").trim();
+      return {
+        src: rawSrc,
+        width: wMatch ? parseInt(wMatch[1], 10) : 0,
+        height: hMatch ? parseInt(hMatch[1], 10) : 0,
+      };
+    }
+    return { src: str, width: 0, height: 0 };
+  }
+
+  function extractYouTubeId(url) {
+    try {
+      var u = new URL(url);
+      var host = u.hostname.replace(/^www\./, "").toLowerCase();
+      if (host === "youtu.be") {
+        var id1 = u.pathname.split("/").filter(Boolean)[0];
+        return id1 && /^[a-zA-Z0-9_-]{6,15}$/.test(id1) ? id1 : null;
+      }
+      if (
+        host === "youtube.com" ||
+        host === "m.youtube.com" ||
+        host === "music.youtube.com" ||
+        host === "youtube-nocookie.com"
+      ) {
+        if (u.pathname === "/watch") {
+          var v = u.searchParams.get("v");
+          return v && /^[a-zA-Z0-9_-]{6,15}$/.test(v) ? v : null;
+        }
+        var segs = u.pathname.split("/").filter(Boolean);
+        if ((segs[0] === "shorts" || segs[0] === "embed" || segs[0] === "live") && segs[1]) {
+          return /^[a-zA-Z0-9_-]{6,15}$/.test(segs[1]) ? segs[1] : null;
+        }
+      }
+    } catch (e) {}
+    return null;
+  }
+
+  function extractVimeoId(url) {
+    try {
+      var u = new URL(url);
+      var host = u.hostname.replace(/^www\./, "").toLowerCase();
+      if (host === "vimeo.com") {
+        var seg = u.pathname.split("/").filter(Boolean)[0];
+        if (seg && /^\d{5,12}$/.test(seg)) return seg;
+      }
+      if (host === "player.vimeo.com") {
+        var segs = u.pathname.split("/").filter(Boolean);
+        if (segs[0] === "video" && segs[1] && /^\d{5,12}$/.test(segs[1])) return segs[1];
+      }
+    } catch (e) {}
+    return null;
+  }
+
+  function parseSafeEmbedInput(rawInput) {
+    var extracted = extractIframeSrc(rawInput);
+    var urlStr = extracted.src;
+    if (!urlStr) return null;
+
+    var parsed;
+    try {
+      parsed = new URL(urlStr);
+    } catch (e) {
+      return null;
+    }
+    if (parsed.protocol !== "https:" && parsed.protocol !== "http:") return null;
+    var host = parsed.hostname.replace(/^www\./, "").toLowerCase();
+
+    // 1. YouTube (watch, shorts, live, youtu.be, embed iframe)
+    var ytId = extractYouTubeId(urlStr);
+    if (ytId) {
+      var isShort =
+        parsed.pathname.indexOf("/shorts/") !== -1 ||
+        (extracted.height > 0 && extracted.width > 0 && extracted.height > extracted.width * 1.15);
+      return {
+        provider: "youtube",
+        embedUrl: "https://www.youtube-nocookie.com/embed/" + encodeURIComponent(ytId),
+        aspect: isShort ? "9:16" : "16:9",
+        videoId: ytId,
+        label: isShort ? "YouTube Short" : "YouTube Video",
+      };
+    }
+
+    // 2. Facebook (official plugins/video.php iframe OR direct facebook.com video/reel/watch URL)
+    if (
+      host === "facebook.com" ||
+      host === "m.facebook.com" ||
+      host === "web.facebook.com" ||
+      host === "fb.watch"
+    ) {
+      if (parsed.pathname.indexOf("/plugins/video.php") === 0) {
+        var hrefParam = parsed.searchParams.get("href");
+        if (!hrefParam) return null;
+        var isVerticalPlugin =
+          hrefParam.indexOf("/reel") !== -1 ||
+          (extracted.height > 0 && extracted.width > 0 && extracted.height > extracted.width * 1.1);
+        var cleanFbUrl =
+          "https://www.facebook.com/plugins/video.php?href=" +
+          encodeURIComponent(hrefParam) +
+          "&show_text=false&width=560";
+        return {
+          provider: "facebook",
+          embedUrl: cleanFbUrl,
+          aspect: isVerticalPlugin ? "9:16" : "16:9",
+          label: isVerticalPlugin ? "Facebook Reel" : "Facebook Video",
+        };
+      }
+      if (parsed.pathname.indexOf("/plugins/post.php") === 0) {
+        var postHref = parsed.searchParams.get("href");
+        if (!postHref) return null;
+        return {
+          provider: "facebook",
+          embedUrl:
+            "https://www.facebook.com/plugins/post.php?href=" +
+            encodeURIComponent(postHref) +
+            "&show_text=true&width=500",
+          aspect: "16:9",
+          label: "Facebook Post",
+        };
+      }
+      // Direct Facebook video / reel / watch link
+      var lowerPath = parsed.pathname.toLowerCase();
+      var isFbVideo =
+        host === "fb.watch" ||
+        lowerPath.indexOf("/videos/") !== -1 ||
+        lowerPath.indexOf("/reel/") !== -1 ||
+        lowerPath.indexOf("/watch") === 0 ||
+        lowerPath.indexOf("/share/v/") !== -1 ||
+        lowerPath.indexOf("/share/r/") !== -1;
+      if (isFbVideo) {
+        var isReel = lowerPath.indexOf("/reel/") !== -1 || lowerPath.indexOf("/share/r/") !== -1;
+        return {
+          provider: "facebook",
+          embedUrl:
+            "https://www.facebook.com/plugins/video.php?href=" +
+            encodeURIComponent(urlStr) +
+            "&show_text=false&width=560",
+          aspect: isReel ? "9:16" : "16:9",
+          label: isReel ? "Facebook Reel" : "Facebook Video",
+        };
+      }
+    }
+
+    // 3. Vimeo
+    var vimeoId = extractVimeoId(urlStr);
+    if (vimeoId) {
+      return {
+        provider: "vimeo",
+        embedUrl: "https://player.vimeo.com/video/" + encodeURIComponent(vimeoId),
+        aspect: "16:9",
+        videoId: vimeoId,
+        label: "Vimeo Video",
+      };
+    }
+
+    return null;
+  }
+
+  function renderEmbedPlayerHtml(embedObj) {
+    if (!embedObj || !embedObj.embedUrl) return "";
+    // Re-validate stored embedUrl strictly before rendering
+    var safe = parseSafeEmbedInput(embedObj.embedUrl);
+    if (!safe) return "";
+    var aspect = embedObj.aspect || safe.aspect || "16:9";
+    var isVertical = aspect === "9:16";
+    var providerLabel =
+      safe.provider === "youtube"
+        ? "YouTube"
+        : safe.provider === "facebook"
+        ? "Facebook"
+        : "Vimeo";
+
+    return (
+      '<div class="native-embed-card ' +
+      (isVertical ? "native-embed-vertical" : "") +
+      '">' +
+      '<div class="native-embed-frame-wrap ' +
+      (isVertical ? "ratio-9-16" : "ratio-16-9") +
+      '">' +
+      '<iframe src="' +
+      escapeHtml(safe.embedUrl) +
+      '" title="' +
+      escapeHtml(providerLabel) +
+      ' embedded video" frameborder="0" scrolling="no" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen loading="lazy" referrerpolicy="strict-origin-when-cross-origin"></iframe>' +
+      "</div>" +
+      '<div class="native-embed-bar">' +
+      '<span class="native-embed-provider">' +
+      ICONS.video +
+      "<span>" +
+      escapeHtml(providerLabel) +
+      " Video</span></span>" +
+      "</div></div>"
+    );
+  }
+
+  // ============================================================================
+  // SMART LINK & MEDIA PREVIEW ENGINE
+  // ============================================================================
   var ogMemoryCache = new Map();
-  var OG_CACHE_PREFIX = "hmm_og_";
+  var OG_CACHE_PREFIX = "hmm_og_v2_";
 
   function cleanMatchedUrl(raw) {
     return String(raw || "").replace(/[.,!?;:)\]]+$/, "");
@@ -312,7 +610,7 @@
       var full = m[0];
       var clean = cleanMatchedUrl(full);
       var trail = full.slice(clean.length);
-      out += escapeHtml(str.slice(lastIdx, m.index));
+      out += formatNonUrlChunk(str.slice(lastIdx, m.index));
       var valid = false;
       try {
         var p = new URL(clean);
@@ -327,46 +625,29 @@
           "</a>" +
           escapeHtml(trail);
       } else {
-        out += escapeHtml(full);
+        out += formatNonUrlChunk(full);
       }
       lastIdx = m.index + full.length;
     }
-    out += escapeHtml(str.slice(lastIdx));
+    out += formatNonUrlChunk(str.slice(lastIdx));
     return out;
   }
 
-  function extractYouTubeId(url) {
+  function isOwnBrandUrl(url) {
     try {
       var u = new URL(url);
       var host = u.hostname.replace(/^www\./, "").toLowerCase();
-      if (host === "youtu.be") {
-        var id1 = u.pathname.split("/").filter(Boolean)[0];
-        return id1 && /^[a-zA-Z0-9_-]{6,15}$/.test(id1) ? id1 : null;
-      }
-      if (host === "youtube.com" || host === "m.youtube.com" || host === "music.youtube.com") {
-        if (u.pathname === "/watch") {
-          var v = u.searchParams.get("v");
-          return v && /^[a-zA-Z0-9_-]{6,15}$/.test(v) ? v : null;
-        }
-        var segs = u.pathname.split("/").filter(Boolean);
-        if ((segs[0] === "shorts" || segs[0] === "embed" || segs[0] === "live") && segs[1]) {
-          return /^[a-zA-Z0-9_-]{6,15}$/.test(segs[1]) ? segs[1] : null;
-        }
+      if (host === CANONICAL_HOST) return true;
+      if (
+        window.location &&
+        (window.location.protocol === "https:" || window.location.protocol === "http:") &&
+        window.location.hostname
+      ) {
+        var cur = window.location.hostname.replace(/^www\./, "").toLowerCase();
+        if (cur && cur !== "localhost" && cur !== "127.0.0.1" && host === cur) return true;
       }
     } catch (e) {}
-    return null;
-  }
-
-  function extractVimeoId(url) {
-    try {
-      var u = new URL(url);
-      var host = u.hostname.replace(/^www\./, "").toLowerCase();
-      if (host === "vimeo.com") {
-        var seg = u.pathname.split("/").filter(Boolean)[0];
-        if (seg && /^\d{5,12}$/.test(seg)) return seg;
-      }
-    } catch (e) {}
-    return null;
+    return false;
   }
 
   function classifyUrl(url) {
@@ -471,6 +752,25 @@
       );
     }
 
+    // Internal KLORIX links ALWAYS render live KLORIX branding (never stale Microlink cache!)
+    if (isOwnBrandUrl(primary.url)) {
+      var cfg = getSiteConfig();
+      var brandTitle = cfg.siteName + (cfg.tagline ? " — " + cfg.tagline : "");
+      var brandDesc = cfg.metaDescription || DEFAULT_SITE_CONFIG.metaDescription;
+      var brandLogo = cfg.logoUrl || "assets/icons/logo.svg";
+      return (
+        '<a href="' + escapeHtml(primary.url) + '" class="link-preview-card link-preview-web" data-og-hydrated="1">' +
+        '<div class="link-preview-og-img"><img src="assets/images/og-banner.png" alt="' + escapeHtml(brandTitle) + '" loading="lazy" onerror="this.src=\'assets/images/og-banner.svg\';" /></div>' +
+        '<div class="link-preview-body">' +
+        '<div class="link-preview-host">' +
+        '<img src="' + escapeHtml(brandLogo) + '" alt="" class="link-preview-fav" onerror="this.style.display=\'none\'" />' +
+        "<span>" + escapeHtml(primary.host.toUpperCase()) + "</span></div>" +
+        '<div class="link-preview-title">' + escapeHtml(brandTitle) + "</div>" +
+        '<div class="link-preview-desc">' + escapeHtml(brandDesc) + "</div>" +
+        "</div></a>"
+      );
+    }
+
     // Standard Web URL — render instant card & hydrate OpenGraph metadata asynchronously
     var cached = getCachedOg(primary.url);
     var title = (cached && cached.title) || buildFallbackTitle(primary.url);
@@ -502,7 +802,7 @@
     var cards = rootEl.querySelectorAll('.link-preview-web[data-og-hydrated="0"]');
     cards.forEach(function (card) {
       var url = card.getAttribute("data-og-url");
-      if (!url) return;
+      if (!url || isOwnBrandUrl(url)) return;
       card.setAttribute("data-og-hydrated", "pending");
 
       var cached = getCachedOg(url);
@@ -547,7 +847,7 @@
     });
   }
 
-  function applyOgToCard(card, meta, url) {
+  function applyOgToCard(card, meta) {
     if (!card || !document.body.contains(card)) return;
     card.setAttribute("data-og-hydrated", "1");
     var titleEl = card.querySelector(".link-preview-title");
@@ -577,12 +877,615 @@
   function openImageLightbox(imgUrl) {
     var safe = safeAvatarUrl(imgUrl);
     if (!safe) return;
+    var isData = safe.indexOf("data:image/") === 0;
     openModal(
       "Image Preview",
       '<div class="lightbox-wrap"><img src="' + escapeHtml(safe) + '" alt="Full preview" referrerpolicy="no-referrer" />' +
-        '<div style="display:flex;justify-content:flex-end;margin-top:12px;">' +
-        '<a href="' + escapeHtml(safe) + '" target="_blank" rel="noopener noreferrer" class="btn btn-secondary btn-sm">Open original ↗</a></div></div>'
+        (!isData
+          ? '<div style="display:flex;justify-content:flex-end;margin-top:12px;">' +
+            '<a href="' + escapeHtml(safe) + '" target="_blank" rel="noopener noreferrer" class="btn btn-secondary btn-sm">Open original ↗</a></div>'
+          : "") +
+        "</div>"
     );
+  }
+
+  // ============================================================================
+  // LIVE @MENTION AUTOCOMPLETE DROPDOWN (Works in Post Composer & Comments)
+  // ============================================================================
+  var mentionUsersCache = [];
+  var mentionCacheAt = 0;
+
+  async function getMentionCandidates() {
+    var now = Date.now();
+    if (mentionUsersCache.length > 0 && now - mentionCacheAt < 45000) {
+      return mentionUsersCache;
+    }
+    try {
+      var snap = await HMM.db.collection("users").limit(80).get();
+      mentionUsersCache = snap.docs
+        .map(function (d) { return d.data(); })
+        .filter(function (u) { return u && u.uid && u.username && !u.isSuspended; });
+      mentionCacheAt = now;
+    } catch (e) {}
+    return mentionUsersCache;
+  }
+
+  function attachMentionAutocomplete(inputEl, currentUid) {
+    if (!inputEl || inputEl.dataset.mentionBound === "1") return function () {};
+    inputEl.dataset.mentionBound = "1";
+
+    var menu = document.createElement("div");
+    menu.className = "mention-autocomplete hidden";
+    document.body.appendChild(menu);
+
+    var activeItems = [];
+    var selectedIdx = 0;
+    var activeTokenRange = null;
+
+    function hideMenu() {
+      menu.classList.add("hidden");
+      activeItems = [];
+      activeTokenRange = null;
+    }
+
+    function positionMenu() {
+      var rect = inputEl.getBoundingClientRect();
+      var spaceBelow = window.innerHeight - rect.bottom;
+      menu.style.left = Math.max(8, Math.min(rect.left, window.innerWidth - 280)) + "px";
+      menu.style.width = Math.min(Math.max(rect.width, 230), 320) + "px";
+      if (spaceBelow < 220 && rect.top > 200) {
+        menu.style.top = "auto";
+        menu.style.bottom = window.innerHeight - rect.top + 6 + "px";
+      } else {
+        menu.style.bottom = "auto";
+        menu.style.top = rect.bottom + 6 + "px";
+      }
+    }
+
+    function insertMention(user) {
+      if (!activeTokenRange || !user) return;
+      var val = inputEl.value;
+      var before = val.slice(0, activeTokenRange.start);
+      var after = val.slice(activeTokenRange.end);
+      var inserted = "@" + user.username + " ";
+      inputEl.value = before + inserted + after;
+      var caret = before.length + inserted.length;
+      inputEl.focus();
+      try {
+        inputEl.setSelectionRange(caret, caret);
+      } catch (e) {}
+      inputEl.dispatchEvent(new Event("input", { bubbles: true }));
+      hideMenu();
+    }
+
+    function renderMenu() {
+      if (activeItems.length === 0) {
+        hideMenu();
+        return;
+      }
+      positionMenu();
+      menu.innerHTML = activeItems
+        .map(function (u, idx) {
+          var isAdm = isOfficialAdminUser(u);
+          return (
+            '<button type="button" class="mention-option ' + (idx === selectedIdx ? "active" : "") + '" data-midx="' + idx + '">' +
+            renderAvatarHtml({ name: u.name, avatarUrl: u.avatarUrl, avatarColor: u.avatarColor, size: "xs", isAdmin: isAdm }) +
+            '<span class="mention-option-meta"><span class="mention-option-name">' + escapeHtml(u.name) +
+            (isAdm ? " " + renderAdminBadgeHtml("compact") : "") + "</span>" +
+            '<span class="mention-option-handle">@' + escapeHtml(u.username) + "</span></span></button>"
+          );
+        })
+        .join("");
+      menu.classList.remove("hidden");
+    }
+
+    async function checkTrigger() {
+      var pos = inputEl.selectionStart != null ? inputEl.selectionStart : inputEl.value.length;
+      var beforeCaret = inputEl.value.slice(0, pos);
+      var m = beforeCaret.match(/(^|[\s(\[])@([a-zA-Z0-9_]{0,20})$/);
+      if (!m) {
+        hideMenu();
+        return;
+      }
+      var query = m[2].toLowerCase();
+      activeTokenRange = {
+        start: pos - m[2].length - 1,
+        end: pos,
+      };
+      var users = await getMentionCandidates();
+      var blockedSvc = HMM.blocks;
+      activeItems = users
+        .filter(function (u) {
+          if (currentUid && u.uid === currentUid) return false;
+          if (blockedSvc && blockedSvc.isEitherBlocked(u.uid)) return false;
+          if (!query) return true;
+          return (
+            u.username.indexOf(query) !== -1 ||
+            (u.nameLower || String(u.name || "").toLowerCase()).indexOf(query) !== -1
+          );
+        })
+        .slice(0, 6);
+      selectedIdx = 0;
+      renderMenu();
+    }
+
+    function onInput() {
+      checkTrigger();
+    }
+
+    function onKeyDown(e) {
+      if (menu.classList.contains("hidden") || activeItems.length === 0) return;
+      if (e.key === "ArrowDown") {
+        e.preventDefault();
+        selectedIdx = (selectedIdx + 1) % activeItems.length;
+        renderMenu();
+      } else if (e.key === "ArrowUp") {
+        e.preventDefault();
+        selectedIdx = (selectedIdx - 1 + activeItems.length) % activeItems.length;
+        renderMenu();
+      } else if (e.key === "Enter" || e.key === "Tab") {
+        e.preventDefault();
+        e.stopPropagation();
+        insertMention(activeItems[selectedIdx]);
+      } else if (e.key === "Escape") {
+        hideMenu();
+      }
+    }
+
+    function onMenuMouseDown(e) {
+      e.preventDefault();
+      var btn = e.target.closest("[data-midx]");
+      if (!btn) return;
+      var idx = parseInt(btn.dataset.midx, 10);
+      if (activeItems[idx]) insertMention(activeItems[idx]);
+    }
+
+    function onDocClick(e) {
+      if (e.target !== inputEl && !menu.contains(e.target)) {
+        hideMenu();
+      }
+    }
+
+    inputEl.addEventListener("input", onInput);
+    inputEl.addEventListener("keydown", onKeyDown);
+    inputEl.addEventListener("blur", function () {
+      setTimeout(hideMenu, 160);
+    });
+    menu.addEventListener("mousedown", onMenuMouseDown);
+    document.addEventListener("click", onDocClick);
+
+    return function cleanup() {
+      inputEl.removeEventListener("input", onInput);
+      inputEl.removeEventListener("keydown", onKeyDown);
+      document.removeEventListener("click", onDocClick);
+      menu.remove();
+      delete inputEl.dataset.mentionBound;
+    };
+  }
+
+  // ============================================================================
+  // TWO-WAY USER BLOCK SERVICE (Firestore blocks/{blocker}_{blocked} + RTDB)
+  // ============================================================================
+  var blockState = {
+    uid: "",
+    blockedByMe: new Map(), // targetUid -> blockDoc
+    blockedMe: new Set(),   // blockerUid
+    unsubOut: null,
+    unsubIn: null,
+    listeners: new Set(),
+  };
+
+  function emitBlockChange() {
+    blockState.listeners.forEach(function (fn) {
+      try { fn(); } catch (e) {}
+    });
+  }
+
+  function cleanupBlocks() {
+    if (blockState.unsubOut) { blockState.unsubOut(); blockState.unsubOut = null; }
+    if (blockState.unsubIn) { blockState.unsubIn(); blockState.unsubIn = null; }
+    blockState.uid = "";
+    blockState.blockedByMe = new Map();
+    blockState.blockedMe = new Set();
+    emitBlockChange();
+  }
+
+  function initBlocks(uid) {
+    if (!uid || !HMM.db) return;
+    if (blockState.uid === uid && blockState.unsubOut) return;
+    cleanupBlocks();
+    blockState.uid = uid;
+
+    blockState.unsubOut = HMM.db
+      .collection("blocks")
+      .where("blockerId", "==", uid)
+      .onSnapshot(
+        function (snap) {
+          var next = new Map();
+          snap.docs.forEach(function (d) {
+            var data = d.data();
+            if (data && data.blockedId) next.set(data.blockedId, data);
+          });
+          blockState.blockedByMe = next;
+          emitBlockChange();
+        },
+        function (err) {
+          console.warn("Outbound blocks listener warning:", err);
+        }
+      );
+
+    blockState.unsubIn = HMM.db
+      .collection("blocks")
+      .where("blockedId", "==", uid)
+      .onSnapshot(
+        function (snap) {
+          var next = new Set();
+          snap.docs.forEach(function (d) {
+            var data = d.data();
+            if (data && data.blockerId) next.add(data.blockerId);
+          });
+          blockState.blockedMe = next;
+          emitBlockChange();
+        },
+        function (err) {
+          console.warn("Inbound blocks listener warning:", err);
+        }
+      );
+  }
+
+  function isBlockedByMe(targetUid) {
+    return Boolean(targetUid && blockState.blockedByMe.has(targetUid));
+  }
+
+  function hasBlockedMe(targetUid) {
+    return Boolean(targetUid && blockState.blockedMe.has(targetUid));
+  }
+
+  function isEitherBlocked(targetUid) {
+    return Boolean(targetUid && (blockState.blockedByMe.has(targetUid) || blockState.blockedMe.has(targetUid)));
+  }
+
+  function getBlockedList() {
+    return Array.from(blockState.blockedByMe.values()).sort(function (a, b) {
+      return timestampToMs(b.createdAt) - timestampToMs(a.createdAt);
+    });
+  }
+
+  function subscribeBlocks(fn) {
+    if (typeof fn !== "function") return function () {};
+    blockState.listeners.add(fn);
+    return function () {
+      blockState.listeners.delete(fn);
+    };
+  }
+
+  async function blockUser(currentProfile, targetUser) {
+    if (!currentProfile || !targetUser || currentProfile.uid === targetUser.uid) {
+      throw new Error("Invalid user to block.");
+    }
+    var myUid = currentProfile.uid;
+    var targetUid = targetUser.uid;
+    var blockId = myUid + "_" + targetUid;
+
+    await HMM.db.collection("blocks").doc(blockId).set({
+      blockId: blockId,
+      blockerId: myUid,
+      blockedId: targetUid,
+      blockedName: sanitizeText(targetUser.name || "Member", 80),
+      blockedUsername: normalizeUsername(targetUser.username || "") || "member",
+      blockedAvatarUrl: safeAvatarUrl(targetUser.avatarUrl || ""),
+      blockedAvatarColor: targetUser.avatarColor || "#006A4E",
+      createdAt: HMM.serverTimestamp(),
+    });
+
+    // Sync to RTDB so RTDB security rules also enforce message blocking
+    if (HMM.rtdb) {
+      HMM.rtdb.ref("blocks/" + myUid + "/" + targetUid).set(true).catch(function () {});
+    }
+
+    // Best-effort cleanup of existing friendship, pending requests, and follows in both directions
+    var pairId = getPairId(myUid, targetUid);
+    var cleanupTasks = [
+      HMM.db.collection("friendships").doc(pairId).delete().catch(function () {}),
+      HMM.db.collection("friendRequests").doc(getFriendRequestId(myUid, targetUid)).delete().catch(function () {}),
+      HMM.db.collection("friendRequests").doc(getFriendRequestId(targetUid, myUid)).delete().catch(function () {}),
+      HMM.db.collection("follows").doc(getFollowId(myUid, targetUid)).delete().catch(function () {}),
+      HMM.db.collection("follows").doc(getFollowId(targetUid, myUid)).delete().catch(function () {}),
+    ];
+    await Promise.all(cleanupTasks);
+  }
+
+  async function unblockUser(myUid, targetUid) {
+    if (!myUid || !targetUid) return;
+    var blockId = myUid + "_" + targetUid;
+    await HMM.db.collection("blocks").doc(blockId).delete();
+    if (HMM.rtdb) {
+      HMM.rtdb.ref("blocks/" + myUid + "/" + targetUid).remove().catch(function () {});
+    }
+  }
+
+  // ============================================================================
+  // OFFICIAL ADMIN ANNOUNCEMENTS SERVICE (announcements/{announcementId})
+  // ============================================================================
+  function subscribeActiveAnnouncements(onData) {
+    if (!HMM.db) return function () {};
+    return HMM.db
+      .collection("announcements")
+      .where("isActive", "==", true)
+      .limit(10)
+      .onSnapshot(
+        function (snap) {
+          var list = snap.docs
+            .map(function (d) { return d.data(); })
+            .sort(function (a, b) { return timestampToMs(b.createdAt) - timestampToMs(a.createdAt); });
+          onData(list);
+        },
+        function (err) {
+          console.warn("Announcements listener warning:", err);
+          onData([]);
+        }
+      );
+  }
+
+  async function getAllAnnouncements() {
+    var snap = await HMM.db.collection("announcements").limit(50).get();
+    return snap.docs
+      .map(function (d) { return d.data(); })
+      .sort(function (a, b) { return timestampToMs(b.createdAt) - timestampToMs(a.createdAt); });
+  }
+
+  async function createAnnouncement(author, payload) {
+    var title = sanitizeText(payload.title, LIMITS.ANNOUNCEMENT_TITLE_MAX);
+    var message = sanitizeText(payload.message, LIMITS.ANNOUNCEMENT_MESSAGE_MAX);
+    var imageUrl = safeAvatarUrl(payload.imageUrl || "");
+    if (!title) throw new Error("Announcement title is required.");
+    if (!message) throw new Error("Announcement message is required.");
+    var id = generateId("ann");
+    await HMM.db.collection("announcements").doc(id).set({
+      announcementId: id,
+      title: title,
+      message: message,
+      imageUrl: imageUrl,
+      authorId: author.uid,
+      authorName: sanitizeText(author.name, 80),
+      authorUsername: author.username,
+      authorAvatarUrl: safeAvatarUrl(author.avatarUrl || ""),
+      authorAvatarColor: author.avatarColor || "#006A4E",
+      isActive: payload.isActive !== false,
+      createdAt: HMM.serverTimestamp(),
+      updatedAt: HMM.serverTimestamp(),
+    });
+    return id;
+  }
+
+  async function updateAnnouncement(id, payload) {
+    var updates = { updatedAt: HMM.serverTimestamp() };
+    if (payload.title !== undefined) {
+      var t = sanitizeText(payload.title, LIMITS.ANNOUNCEMENT_TITLE_MAX);
+      if (!t) throw new Error("Title cannot be empty.");
+      updates.title = t;
+    }
+    if (payload.message !== undefined) {
+      var m = sanitizeText(payload.message, LIMITS.ANNOUNCEMENT_MESSAGE_MAX);
+      if (!m) throw new Error("Message cannot be empty.");
+      updates.message = m;
+    }
+    if (payload.imageUrl !== undefined) {
+      updates.imageUrl = safeAvatarUrl(payload.imageUrl || "");
+    }
+    if (payload.isActive !== undefined) {
+      updates.isActive = Boolean(payload.isActive);
+    }
+    await HMM.db.collection("announcements").doc(id).update(updates);
+  }
+
+  async function removeAnnouncement(id) {
+    await HMM.db.collection("announcements").doc(id).delete();
+  }
+
+  function openAnnouncementModal(author, existing, onSaved) {
+    var isEdit = Boolean(existing && existing.announcementId);
+    var currentImg = existing ? existing.imageUrl || "" : "";
+
+    openModal(
+      isEdit ? "Edit Official Announcement" : "Post Official Announcement",
+      '<p class="text-muted" style="font-size:13px;margin-bottom:14px;">Announcements appear pinned at the top of everyone\'s Home Feed with the Official Admin badge.</p>' +
+        '<form id="announcement-modal-form">' +
+        '<div class="form-group"><label class="form-label" for="ann-title">Title</label>' +
+        '<input id="ann-title" class="form-input" type="text" maxlength="140" placeholder="e.g., Welcome to KLORIX Community!" value="' +
+        escapeHtml(existing ? existing.title : "") + '" required /></div>' +
+        '<div class="form-group"><label class="form-label" for="ann-message">Announcement Message</label>' +
+        '<textarea id="ann-message" class="form-textarea" maxlength="2000" rows="4" placeholder="Write your official community announcement... (supports links, @mentions, #hashtags)" required>' +
+        escapeHtml(existing ? existing.message : "") + "</textarea></div>" +
+        '<div class="form-group"><label class="form-label">Optional Banner Image</label>' +
+        '<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:8px;">' +
+        '<label class="btn btn-secondary btn-sm" style="cursor:pointer;">Upload Image<input type="file" id="ann-img-file" accept="image/*" style="display:none;" /></label>' +
+        '<button type="button" id="ann-img-clear" class="btn btn-ghost btn-sm ' + (currentImg ? "" : "hidden") + '">Remove Image</button>' +
+        "</div>" +
+        '<input id="ann-img-url" class="form-input" type="text" placeholder="Or paste an image URL (https://...)" value="' +
+        escapeHtml(currentImg.indexOf("data:") === 0 ? "" : currentImg) + '" />' +
+        '<div id="ann-img-preview" style="margin-top:10px;' + (currentImg ? "" : "display:none;") + '">' +
+        (currentImg ? '<img src="' + escapeHtml(currentImg) + '" alt="Announcement preview" style="max-height:180px;width:100%;object-fit:cover;border-radius:10px;border:1px solid var(--border);" />' : "") +
+        "</div></div>" +
+        '<div style="display:flex;justify-content:flex-end;gap:8px;margin-top:16px;">' +
+        '<button type="button" class="btn btn-secondary" id="ann-cancel-btn">Cancel</button>' +
+        '<button type="submit" class="btn btn-primary" id="ann-submit-btn">' + ICONS.megaphone + " " + (isEdit ? "Save Changes" : "Publish to Feed") + "</button>" +
+        "</div></form>",
+      function (body, close) {
+        var fileInput = body.querySelector("#ann-img-file");
+        var urlInput = body.querySelector("#ann-img-url");
+        var clearBtn = body.querySelector("#ann-img-clear");
+        var previewBox = body.querySelector("#ann-img-preview");
+        var imgValue = currentImg;
+
+        function refreshPreview() {
+          if (imgValue) {
+            previewBox.style.display = "block";
+            previewBox.innerHTML =
+              '<img src="' + escapeHtml(imgValue) + '" alt="Preview" style="max-height:180px;width:100%;object-fit:cover;border-radius:10px;border:1px solid var(--border);" />';
+            clearBtn.classList.remove("hidden");
+          } else {
+            previewBox.style.display = "none";
+            previewBox.innerHTML = "";
+            clearBtn.classList.add("hidden");
+          }
+        }
+
+        fileInput.addEventListener("change", async function () {
+          var f = fileInput.files && fileInput.files[0];
+          if (!f) return;
+          try {
+            imgValue = await compressImageFileToDataUrl(f, 960, 0.82, 310000);
+            urlInput.value = "";
+            refreshPreview();
+            showToast("Image attached and optimized.", "success");
+          } catch (err) {
+            showToast(err.message || "Could not process image.", "error");
+          }
+        });
+
+        urlInput.addEventListener("input", function () {
+          var v = urlInput.value.trim();
+          if (validateOptionalUrl(v) === null) {
+            imgValue = v;
+            refreshPreview();
+          }
+        });
+
+        clearBtn.addEventListener("click", function () {
+          imgValue = "";
+          urlInput.value = "";
+          fileInput.value = "";
+          refreshPreview();
+        });
+
+        body.querySelector("#ann-cancel-btn").addEventListener("click", close);
+
+        body.querySelector("#announcement-modal-form").addEventListener("submit", async function (e) {
+          e.preventDefault();
+          var btn = body.querySelector("#ann-submit-btn");
+          var titleVal = body.querySelector("#ann-title").value;
+          var msgVal = body.querySelector("#ann-message").value;
+          if (!imgValue && urlInput.value.trim()) {
+            var urlErr = validateOptionalUrl(urlInput.value.trim());
+            if (urlErr) {
+              showToast(urlErr, "error");
+              return;
+            }
+            imgValue = urlInput.value.trim();
+          }
+          btn.disabled = true;
+          try {
+            if (isEdit) {
+              await updateAnnouncement(existing.announcementId, {
+                title: titleVal,
+                message: msgVal,
+                imageUrl: imgValue,
+              });
+              showToast("Announcement updated!", "success");
+            } else {
+              await createAnnouncement(author, {
+                title: titleVal,
+                message: msgVal,
+                imageUrl: imgValue,
+              });
+              showToast("Official announcement published to everyone's Home Feed!", "success");
+            }
+            close();
+            if (typeof onSaved === "function") onSaved();
+          } catch (err) {
+            showToast(getFriendlyErrorMessage(err), "error");
+            btn.disabled = false;
+          }
+        });
+      }
+    );
+  }
+
+  // ============================================================================
+  // ADMIN ANONYMOUS IN-FEED PROMOS / VIDEOS & ADS SERVICE (feedPromos/{promoId})
+  // ============================================================================
+  function subscribeActivePromos(onData) {
+    if (!HMM.db) return function () {};
+    return HMM.db
+      .collection("feedPromos")
+      .where("isActive", "==", true)
+      .limit(20)
+      .onSnapshot(
+        function (snap) {
+          var list = snap.docs
+            .map(function (d) { return d.data(); })
+            .sort(function (a, b) { return timestampToMs(b.createdAt) - timestampToMs(a.createdAt); });
+          onData(list);
+        },
+        function (err) {
+          console.warn("Feed promos listener warning:", err);
+          onData([]);
+        }
+      );
+  }
+
+  async function getAllPromos() {
+    var snap = await HMM.db.collection("feedPromos").limit(50).get();
+    return snap.docs
+      .map(function (d) { return d.data(); })
+      .sort(function (a, b) { return timestampToMs(b.createdAt) - timestampToMs(a.createdAt); });
+  }
+
+  async function createPromo(payload) {
+    var promoType = payload.promoType === "image_ad" ? "image_ad" : "embed";
+    var interval = Math.max(1, Math.min(50, parseInt(payload.intervalPosts, 10) || 4));
+    var id = generateId("promo");
+
+    var doc = {
+      promoId: id,
+      promoType: promoType,
+      label: sanitizeText(payload.label || "Featured", 40),
+      title: sanitizeText(payload.title || "", 140),
+      caption: sanitizeText(payload.caption || "", 600),
+      embedProvider: "",
+      embedUrl: "",
+      embedAspect: "16:9",
+      imageUrl: "",
+      ctaUrl: "",
+      ctaText: sanitizeText(payload.ctaText || "", 40),
+      intervalPosts: interval,
+      isActive: payload.isActive !== false,
+      createdAt: HMM.serverTimestamp(),
+      updatedAt: HMM.serverTimestamp(),
+    };
+
+    if (promoType === "embed") {
+      var parsed = parseSafeEmbedInput(payload.embedRaw || payload.embedUrl);
+      if (!parsed) {
+        throw new Error("Please paste a valid YouTube, Facebook, or Vimeo embed code or video URL.");
+      }
+      doc.embedProvider = parsed.provider;
+      doc.embedUrl = parsed.embedUrl;
+      doc.embedAspect = parsed.aspect;
+    } else {
+      var img = safeAvatarUrl(payload.imageUrl || "");
+      if (!img) throw new Error("Please upload an image or provide a valid image URL for the ad.");
+      doc.imageUrl = img;
+    }
+
+    if (payload.ctaUrl && payload.ctaUrl.trim()) {
+      var ctaErr = validateOptionalUrl(payload.ctaUrl.trim());
+      if (ctaErr) throw new Error("CTA Link: " + ctaErr);
+      doc.ctaUrl = payload.ctaUrl.trim();
+    }
+
+    await HMM.db.collection("feedPromos").doc(id).set(doc);
+    return id;
+  }
+
+  async function updatePromo(promoId, updates) {
+    var next = Object.assign({}, updates, { updatedAt: HMM.serverTimestamp() });
+    await HMM.db.collection("feedPromos").doc(promoId).update(next);
+  }
+
+  async function removePromo(promoId) {
+    await HMM.db.collection("feedPromos").doc(promoId).delete();
   }
 
   // ============================================================================
@@ -590,14 +1493,14 @@
   // ============================================================================
   var SITE_CONFIG_CACHE_KEY = "hmm_site_config_cache";
   var DEFAULT_SITE_CONFIG = {
-    siteName: "HMM HMM",
+    siteName: "KLORIX",
     tagline: "Connect. Share. Belong.",
     logoUrl: "assets/icons/logo.svg",
     faviconUrl: "assets/icons/favicon.svg",
     metaDescription:
-      "HMM HMM — Connect. Share. Belong. A modern Bangladeshi social network built for real-time conversations, community posts, and meaningful connections.",
+      "KLORIX (KLORIX Community) — Connect. Share. Belong. A modern social network for real-time conversations, community posts, embedded videos, and meaningful connections.",
     metaKeywords:
-      "HMM HMM, Bangladesh social network, community, real-time chat, group chat, social media",
+      "KLORIX, KLORIX Community, social network, community, real-time chat, group chat, video sharing, social media",
     primaryAdminUid: "",
   };
 
@@ -610,6 +1513,12 @@
       var raw = localStorage.getItem(SITE_CONFIG_CACHE_KEY);
       if (raw) {
         var parsed = JSON.parse(raw);
+        // Migrate old cached HMM HMM defaults automatically to KLORIX
+        if (parsed && parsed.siteName === "HMM HMM") {
+          parsed.siteName = DEFAULT_SITE_CONFIG.siteName;
+          parsed.metaDescription = DEFAULT_SITE_CONFIG.metaDescription;
+          parsed.metaKeywords = DEFAULT_SITE_CONFIG.metaKeywords;
+        }
         siteConfigState = Object.assign({}, DEFAULT_SITE_CONFIG, parsed);
       }
     } catch (e) {}
@@ -657,6 +1566,7 @@
     }
     setMeta('meta[name="description"]', "name", "description", desc);
     setMeta('meta[name="keywords"]', "name", "keywords", keywords);
+    setMeta('meta[property="og:site_name"]', "property", "og:site_name", siteName);
     setMeta('meta[property="og:title"]', "property", "og:title", siteName + (tagline ? " — " + tagline : ""));
     setMeta('meta[property="og:description"]', "property", "og:description", desc);
 
@@ -692,9 +1602,7 @@
               });
             }
           },
-          function () {
-            // Silently keep default/cached config if rules haven't deployed siteConfig yet
-          }
+          function () {}
         );
     } catch (e) {}
   }
@@ -849,6 +1757,7 @@
 
   async function createNotificationRecord(params) {
     if (!params.recipientId || !params.sender || params.recipientId === params.sender.uid) return;
+    if (isEitherBlocked(params.recipientId)) return;
     var notificationId = generateId("ntf");
     try {
       await HMM.db.collection("notifications").doc(notificationId).set({
@@ -999,7 +1908,7 @@
     message: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>',
     bell: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>',
     user: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>',
-    settings: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>',
+    settings: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>',
     shield: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>',
     menu: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>',
     sun: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>',
@@ -1017,15 +1926,24 @@
     send: '<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>',
     logout: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>',
     close: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>',
-    arrowLeft: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>',
+    back: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>',
+    check: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>',
     mapPin: '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>',
     calendar: '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>',
-    mail: '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>',
     image: '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>',
     play: '<svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><polygon points="6 4 20 12 6 20 6 4"/></svg>',
     copy: '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>',
     globe: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>',
     cpu: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="16" height="16" rx="2" ry="2"/><rect x="9" y="9" width="6" height="6"/><line x1="9" y1="1" x2="9" y2="4"/><line x1="15" y1="1" x2="15" y2="4"/><line x1="9" y1="20" x2="9" y2="23"/><line x1="15" y1="20" x2="15" y2="23"/><line x1="20" y1="9" x2="23" y2="9"/><line x1="20" y1="14" x2="23" y2="14"/><line x1="1" y1="9" x2="4" y2="9"/><line x1="1" y1="14" x2="4" y2="14"/></svg>',
+    ban: '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"/></svg>',
+    megaphone: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m3 11 18-5v12L3 14v-3z"/><path d="M11.6 16.8a3 3 0 1 1-5.8-1.6"/></svg>',
+    video: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg>',
+    tag: '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg>',
+    hash: '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="4" y1="9" x2="20" y2="9"/><line x1="4" y1="15" x2="20" y2="15"/><line x1="10" y1="3" x2="8" y2="21"/><line x1="16" y1="3" x2="14" y2="21"/></svg>',
+    eye: '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>',
+    sparkles: '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z"/></svg>',
+    code: '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>',
+    mail: '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>',
     google: '<svg width="18" height="18" viewBox="0 0 24 24"><path fill="#4285F4" d="M23.745 12.27c0-.79-.07-1.54-.19-2.27h-11.3v4.51h6.47c-.29 1.48-1.14 2.73-2.4 3.58v3h3.86c2.26-2.09 3.56-5.17 3.56-8.82z"/><path fill="#34A853" d="M12.255 24c3.24 0 5.95-1.08 7.93-2.91l-3.86-3c-1.08.72-2.45 1.16-4.07 1.16-3.13 0-5.78-2.11-6.73-4.96h-3.98v3.09C3.515 21.3 7.565 24 12.255 24z"/><path fill="#FBBC05" d="M5.525 14.29c-.25-.72-.38-1.49-.38-2.29s.14-1.57.38-2.29V6.62h-3.98a11.86 11.86 0 0 0 0 10.76l3.98-3.09z"/><path fill="#EA4335" d="M12.255 4.75c1.77 0 3.35.61 4.6 1.8l3.42-3.42C18.205 1.19 15.495 0 12.255 0c-4.69 0-8.74 2.7-10.71 6.62l3.98 3.09c.95-2.85 3.6-4.96 6.73-4.96z"/></svg>',
   };
 
@@ -1038,8 +1956,38 @@
     saveCache: saveCachedSiteConfig,
   };
 
+  HMM.blocks = {
+    init: initBlocks,
+    cleanup: cleanupBlocks,
+    isBlockedByMe: isBlockedByMe,
+    hasBlockedMe: hasBlockedMe,
+    isEitherBlocked: isEitherBlocked,
+    getBlockedList: getBlockedList,
+    blockUser: blockUser,
+    unblockUser: unblockUser,
+    subscribe: subscribeBlocks,
+  };
+
+  HMM.announcements = {
+    subscribeActive: subscribeActiveAnnouncements,
+    getAll: getAllAnnouncements,
+    create: createAnnouncement,
+    update: updateAnnouncement,
+    remove: removeAnnouncement,
+    openCreateEditModal: openAnnouncementModal,
+  };
+
+  HMM.promos = {
+    subscribeActive: subscribeActivePromos,
+    getAll: getAllPromos,
+    create: createPromo,
+    update: updatePromo,
+    remove: removePromo,
+  };
+
   HMM.utils = {
     BOOTSTRAPPED_ADMIN_EMAIL: BOOTSTRAPPED_ADMIN_EMAIL,
+    CANONICAL_HOST: CANONICAL_HOST,
     LIMITS: LIMITS,
     USERNAME_REGEX: USERNAME_REGEX,
     REPORT_REASONS: REPORT_REASONS,
@@ -1061,11 +2009,19 @@
     renderAdminBadgeHtml: renderAdminBadgeHtml,
     compressImageFileToDataUrl: compressImageFileToDataUrl,
     extractUrls: extractUrls,
+    extractMentions: extractMentions,
+    extractHashtags: extractHashtags,
     linkifyText: linkifyText,
+    formatRichText: linkifyText,
+    parseSafeEmbedInput: parseSafeEmbedInput,
+    renderEmbedPlayerHtml: renderEmbedPlayerHtml,
+    isOwnBrandUrl: isOwnBrandUrl,
     classifyUrl: classifyUrl,
     renderSmartPreviewHtml: renderSmartPreviewHtml,
     hydrateLinkPreviews: hydrateLinkPreviews,
     openImageLightbox: openImageLightbox,
+    attachMentionAutocomplete: attachMentionAutocomplete,
+    getMentionCandidates: getMentionCandidates,
     getPairId: getPairId,
     getSortedPair: getSortedPair,
     getLikeId: getLikeId,

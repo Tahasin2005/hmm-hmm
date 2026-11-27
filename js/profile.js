@@ -1,6 +1,8 @@
 /**
- * HMM HMM — User Profile View Controller (#profile?uid= or #profile?u=)
- * Includes distinguished Executive Official Administrator Profile badge & styling.
+ * KLORIX (window.HMM) — User Profile View Controller (#profile?uid= or #profile?u=)
+ * Includes:
+ * - Official Administrator Profile badge & direct "Post Official Announcement" composer/manager
+ * - Two-Way User Block / Unblock controls + isolation state screens
  * Classic script (works directly via file://, Vercel, and cPanel).
  */
 (function (HMM) {
@@ -42,25 +44,129 @@
     };
     var presence = { online: false, lastSeen: 0 };
     var userPosts = [];
+    var adminAnnouncements = [];
 
     ctx.mainEl.innerHTML =
       '<section class="card profile-card" id="profile-header-card"></section>' +
+      '<div id="profile-admin-announcements-slot"></div>' +
+      '<div id="profile-posts-section">' +
       '<div class="page-header"><h2 style="font-size:18px;font-weight:800;">Posts</h2></div>' +
       '<div id="profile-posts-container" style="display:flex;flex-direction:column;gap:14px;">' +
-      '<div class="card empty-state"><div class="spinner"></div><p>Loading posts...</p></div></div>';
+      '<div class="card empty-state"><div class="spinner"></div><p>Loading posts...</p></div></div></div>';
 
+    var postsSection = document.getElementById("profile-posts-section");
     var postsContainer = document.getElementById("profile-posts-container");
+    var adminAnnSlot = document.getElementById("profile-admin-announcements-slot");
+
     var postManager = HMM.feed.createPostListManager({
       container: postsContainer,
       ctx: ctx,
       onPostMutated: async function () {
         userPosts = await HMM.feed.getUserPosts(targetProfile.uid);
-        postManager.render(
-          userPosts,
-          "No posts yet",
-          isOwnProfile ? "Share your first post from the Home Feed." : "This user hasn't posted yet."
-        );
+        renderProfilePosts();
       },
+    });
+
+    function renderProfilePosts() {
+      if (!isOwnProfile && HMM.blocks && HMM.blocks.isEitherBlocked(targetProfile.uid)) {
+        postsSection.classList.add("hidden");
+        return;
+      }
+      postsSection.classList.remove("hidden");
+      postManager.render(
+        userPosts,
+        "No posts yet",
+        isOwnProfile ? "Share your first post from the Home Feed." : "This user hasn't shared any posts yet."
+      );
+    }
+
+    async function loadAdminAnnouncements() {
+      if (!isOwnProfile || !ctx.isAdmin) return;
+      try {
+        adminAnnouncements = await HMM.announcements.getAll();
+        renderAdminAnnouncementsBox();
+      } catch (e) {}
+    }
+
+    function renderAdminAnnouncementsBox() {
+      if (!adminAnnSlot || !isOwnProfile || !ctx.isAdmin) return;
+      adminAnnSlot.innerHTML =
+        '<section class="card profile-ann-manager">' +
+        '<div class="profile-ann-head"><div>' +
+        '<h3 style="display:flex;align-items:center;gap:8px;font-size:16px;font-weight:800;">' +
+        U.ICONS.megaphone + " Official Home Feed Announcements</h3>" +
+        '<p class="text-muted" style="font-size:13px;margin-top:2px;">Pinned announcements posted here appear at the top of everyone\'s Home Feed.</p>' +
+        "</div>" +
+        '<button type="button" id="btn-profile-new-ann" class="btn btn-primary btn-sm">' + U.ICONS.megaphone + " Post Announcement</button>" +
+        "</div>" +
+        (adminAnnouncements.length === 0
+          ? '<p class="text-muted" style="font-size:13.5px;margin-top:12px;">No announcements published yet. Click <strong>Post Announcement</strong> to broadcast an official notice (with optional image) to all members.</p>'
+          : '<div class="profile-ann-list">' +
+            adminAnnouncements
+              .map(function (a) {
+                var safeImg = U.safeAvatarUrl(a.imageUrl || "");
+                return (
+                  '<div class="profile-ann-item">' +
+                  (safeImg ? '<img src="' + U.escapeHtml(safeImg) + '" alt="" class="profile-ann-thumb" />' : "") +
+                  '<div class="profile-ann-info">' +
+                  '<div class="profile-ann-title-row"><strong>' + U.escapeHtml(a.title) + "</strong>" +
+                  '<span class="status-tag ' + (a.isActive ? "status-resolved" : "status-dismissed") + '">' + (a.isActive ? "Pinned Live" : "Hidden") + "</span></div>" +
+                  '<p class="text-muted" style="font-size:13px;margin-top:3px;">' + U.escapeHtml(String(a.message || "").slice(0, 140)) + (String(a.message || "").length > 140 ? "…" : "") + "</p>" +
+                  "</div>" +
+                  '<div class="profile-ann-actions">' +
+                  '<button type="button" class="btn btn-secondary btn-sm" data-pann-toggle="' + U.escapeHtml(a.announcementId) + '" data-active="' + (a.isActive ? "1" : "0") + '">' + (a.isActive ? "Hide" : "Show") + "</button>" +
+                  '<button type="button" class="btn btn-secondary btn-sm" data-pann-edit="' + U.escapeHtml(a.announcementId) + '">' + U.ICONS.edit + "</button>" +
+                  '<button type="button" class="btn btn-danger-soft btn-sm" data-pann-del="' + U.escapeHtml(a.announcementId) + '">' + U.ICONS.trash + "</button>" +
+                  "</div></div>"
+                );
+              })
+              .join("") +
+            "</div>") +
+        "</section>";
+
+      var newBtn = document.getElementById("btn-profile-new-ann");
+      if (newBtn) {
+        newBtn.addEventListener("click", function () {
+          HMM.announcements.openCreateEditModal(ctx.profile, null, loadAdminAnnouncements);
+        });
+      }
+    }
+
+    adminAnnSlot.addEventListener("click", async function (e) {
+      var toggleBtn = e.target.closest("[data-pann-toggle]");
+      if (toggleBtn) {
+        toggleBtn.disabled = true;
+        try {
+          var nextActive = toggleBtn.dataset.active !== "1";
+          await HMM.announcements.update(toggleBtn.dataset.pannToggle, { isActive: nextActive });
+          U.showToast(nextActive ? "Announcement is now live on Home Feed." : "Announcement hidden from Home Feed.", "success");
+          await loadAdminAnnouncements();
+        } catch (err) {
+          U.showToast(U.getFriendlyErrorMessage(err), "error");
+          toggleBtn.disabled = false;
+        }
+        return;
+      }
+
+      var editBtn = e.target.closest("[data-pann-edit]");
+      if (editBtn) {
+        var found = adminAnnouncements.find(function (a) { return a.announcementId === editBtn.dataset.pannEdit; });
+        if (found) HMM.announcements.openCreateEditModal(ctx.profile, found, loadAdminAnnouncements);
+        return;
+      }
+
+      var delBtn = e.target.closest("[data-pann-del]");
+      if (delBtn) {
+        delBtn.disabled = true;
+        try {
+          await HMM.announcements.remove(delBtn.dataset.pannDel);
+          U.showToast("Announcement deleted.", "success");
+          await loadAdminAnnouncements();
+        } catch (err) {
+          U.showToast(U.getFriendlyErrorMessage(err), "error");
+          delBtn.disabled = false;
+        }
+      }
     });
 
     function openEditProfileModal() {
@@ -140,6 +246,35 @@
       var card = document.getElementById("profile-header-card");
       if (!card) return;
 
+      var iBlocked = !isOwnProfile && HMM.blocks && HMM.blocks.isBlockedByMe(targetProfile.uid);
+      var theyBlocked = !isOwnProfile && HMM.blocks && HMM.blocks.hasBlockedMe(targetProfile.uid);
+
+      if (theyBlocked) {
+        card.className = "card profile-card";
+        card.innerHTML =
+          '<div class="empty-state" style="padding:36px 20px;">' +
+          '<div class="empty-state-icon">' + U.ICONS.ban + "</div>" +
+          "<h3>This profile is unavailable</h3>" +
+          "<p>You don't have access to view this member's profile or posts.</p>" +
+          '<a href="#feed" class="btn btn-primary btn-sm">Back to Home Feed</a></div>';
+        renderProfilePosts();
+        return;
+      }
+
+      if (iBlocked) {
+        card.className = "card profile-card";
+        card.innerHTML =
+          '<div class="empty-state" style="padding:36px 20px;">' +
+          '<div class="empty-state-icon" style="background:var(--crimson-soft);color:var(--crimson);">' + U.ICONS.ban + "</div>" +
+          "<h3>You blocked " + U.escapeHtml(targetProfile.name) + "</h3>" +
+          "<p>@" + U.escapeHtml(targetProfile.username) + " cannot message you or see your posts, and their content is hidden from you.</p>" +
+          '<div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap;">' +
+          '<button type="button" class="btn btn-primary btn-sm" data-paction="unblock">Unblock User</button>' +
+          '<a href="#feed" class="btn btn-secondary btn-sm">Back to Home Feed</a></div></div>';
+        renderProfilePosts();
+        return;
+      }
+
       var isProfileAdmin = U.isOfficialAdminUser(targetProfile) || (isOwnProfile && ctx.isAdmin);
       card.classList.toggle("profile-card-admin", isProfileAdmin);
 
@@ -147,7 +282,10 @@
       if (isOwnProfile) {
         actionsHtml =
           '<button type="button" class="btn btn-primary btn-sm" id="btn-edit-profile">' + U.ICONS.edit + " Edit profile</button>" +
-          (ctx.isAdmin ? '<a href="#admin" class="btn btn-outline btn-sm">' + U.ICONS.shield + " Admin Console</a>" : "") +
+          (ctx.isAdmin
+            ? '<button type="button" class="btn btn-outline btn-sm" id="btn-header-post-ann">' + U.ICONS.megaphone + " Announce</button>" +
+              '<a href="#admin" class="btn btn-secondary btn-sm">' + U.ICONS.shield + " Admin</a>"
+            : "") +
           '<a href="#settings" class="btn btn-secondary btn-sm">' + U.ICONS.settings + " Settings</a>";
       } else {
         var isFriend = socialState.friendUids.has(targetProfile.uid);
@@ -176,6 +314,7 @@
           friendBtn +
           followBtn +
           '<a href="#messages?uid=' + encodeURIComponent(targetProfile.uid) + '" class="btn btn-secondary btn-sm">' + U.ICONS.message + " Message</a>" +
+          '<button type="button" class="btn btn-danger-soft btn-sm" data-paction="block" title="Block user">' + U.ICONS.ban + " Block</button>" +
           (!isProfileAdmin
             ? '<button type="button" class="icon-btn" data-paction="report" title="Report user" aria-label="Report user">' + U.ICONS.flag + "</button>"
             : "");
@@ -212,7 +351,7 @@
         (isOwnProfile ? "Online" : U.escapeHtml(U.formatPresenceLabel(presence.online, presence.lastSeen))) +
         "</span></div></div>" +
         adminExecutiveStrip +
-        (targetProfile.bio ? '<p class="profile-bio">' + U.escapeHtml(targetProfile.bio) + "</p>" : "") +
+        (targetProfile.bio ? '<p class="profile-bio">' + U.linkifyText(targetProfile.bio) + "</p>" : "") +
         '<div class="profile-meta-row">' +
         (targetProfile.location ? '<span class="profile-meta-item">' + U.ICONS.mapPin + " " + U.escapeHtml(targetProfile.location) + "</span>" : "") +
         '<span class="profile-meta-item">' + U.ICONS.calendar + " Joined " + U.escapeHtml(U.formatJoinDate(targetProfile.createdAt)) + "</span></div>" +
@@ -225,6 +364,15 @@
 
       var editBtn = document.getElementById("btn-edit-profile");
       if (editBtn) editBtn.addEventListener("click", openEditProfileModal);
+
+      var headerAnnBtn = document.getElementById("btn-header-post-ann");
+      if (headerAnnBtn) {
+        headerAnnBtn.addEventListener("click", function () {
+          HMM.announcements.openCreateEditModal(ctx.profile, null, loadAdminAnnouncements);
+        });
+      }
+
+      renderProfilePosts();
     }
 
     document.getElementById("profile-header-card").addEventListener("click", async function (e) {
@@ -239,9 +387,38 @@
         });
         return;
       }
+      if (action === "block") {
+        U.openModal(
+          "Block " + targetProfile.name + "?",
+          '<p style="font-size:14px;line-height:1.6;">Blocking <strong>' + U.escapeHtml(targetProfile.name) + "</strong> (@" +
+            U.escapeHtml(targetProfile.username) + ") will remove friendships &amp; follows, disable messaging, and hide each other's posts and profiles.</p>" +
+            '<div style="display:flex;justify-content:flex-end;gap:8px;margin-top:16px;">' +
+            '<button type="button" id="pblk-cancel" class="btn btn-secondary">Cancel</button>' +
+            '<button type="button" id="pblk-confirm" class="btn btn-danger">' + U.ICONS.ban + " Block User</button></div>",
+          function (body, close) {
+            body.querySelector("#pblk-cancel").addEventListener("click", close);
+            body.querySelector("#pblk-confirm").addEventListener("click", async function (ev) {
+              ev.currentTarget.disabled = true;
+              try {
+                await HMM.blocks.blockUser(ctx.profile, targetProfile);
+                U.showToast("Blocked " + targetProfile.name + ".", "success");
+                close();
+              } catch (err) {
+                U.showToast(U.getFriendlyErrorMessage(err), "error");
+                ev.currentTarget.disabled = false;
+              }
+            });
+          }
+        );
+        return;
+      }
+
       btn.disabled = true;
       try {
-        if (action === "add-friend") {
+        if (action === "unblock") {
+          await HMM.blocks.unblockUser(ctx.user.uid, targetProfile.uid);
+          U.showToast("Unblocked " + targetProfile.name + ".", "success");
+        } else if (action === "add-friend") {
           await HMM.friends.sendFriendRequest(ctx.profile, targetProfile);
           U.showToast("Friend request sent!", "success");
         } else if (action === "cancel") {
@@ -291,27 +468,25 @@
 
     var unsubReacts = HMM.feed.subscribeToAllPostReactions(function (byPost) {
       postManager.setReactionsMap(byPost);
-      postManager.render(
-        userPosts,
-        "No posts yet",
-        isOwnProfile ? "Share your first post from the Home Feed." : "This user hasn't shared any posts yet."
-      );
+      renderProfilePosts();
+    });
+
+    var unsubBlocks = HMM.blocks.subscribe(function () {
+      renderHeader();
     });
 
     ctx.onCleanup(function () {
       presenceRef.off("value", presenceCb);
       if (unsubSocial) unsubSocial();
       if (unsubReacts) unsubReacts();
+      if (unsubBlocks) unsubBlocks();
       postManager.cleanup();
     });
 
     renderHeader();
+    loadAdminAnnouncements();
     userPosts = await HMM.feed.getUserPosts(targetProfile.uid);
-    postManager.render(
-      userPosts,
-      "No posts yet",
-      isOwnProfile ? "Share your first post from the Home Feed." : "This user hasn't shared any posts yet."
-    );
+    renderProfilePosts();
   }
 
   HMM.profile = { mountView: mountProfileView };

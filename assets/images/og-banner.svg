@@ -1,11 +1,24 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 630" fill="none">
-  <rect width="1200" height="630" fill="#006A4E"/>
-  <circle cx="1020" cy="130" r="220" fill="#00543E" fill-opacity="0.7"/>
-  <circle cx="180" cy="520" r="180" fill="#00543E" fill-opacity="0.6"/>
-  <rect x="110" y="195" width="124" height="124" rx="30" fill="#FFFFFF" fill-opacity="0.14"/>
-  <path d="M144 232V282M144 257H174M174 232V282" stroke="#FFFFFF" stroke-width="10" stroke-linecap="round" stroke-linejoin="round"/>
-  <circle cx="198" cy="234" r="9" fill="#E14245"/>
-  <text x="272" y="255" fill="#FFFFFF" font-family="system-ui, -apple-system, sans-serif" font-size="72" font-weight="800" letter-spacing="-1">HMM HMM</text>
-  <text x="272" y="312" fill="#D5EFE6" font-family="system-ui, -apple-system, sans-serif" font-size="32" font-weight="500">Connect. Share. Belong.</text>
-  <text x="110" y="425" fill="#B6E1D2" font-family="system-ui, -apple-system, sans-serif" font-size="24">A modern Bangladeshi social network built for real conversations and community.</text>
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630" fill="none">
+  <defs>
+    <linearGradient id="ogBg" x1="0" y1="0" x2="1200" y2="630" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#09151A"/>
+      <stop offset="52%" stop-color="#005A43"/>
+      <stop offset="100%" stop-color="#073A52"/>
+    </linearGradient>
+    <linearGradient id="kStroke" x1="150" y1="205" x2="225" y2="305" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#38BDF8"/>
+      <stop offset="100%" stop-color="#34D399"/>
+    </linearGradient>
+  </defs>
+  <rect width="1200" height="630" fill="url(#ogBg)"/>
+  <circle cx="1040" cy="115" r="240" fill="#10B981" fill-opacity="0.14"/>
+  <circle cx="160" cy="540" r="210" fill="#38BDF8" fill-opacity="0.12"/>
+  <rect x="108" y="184" width="132" height="132" rx="32" fill="#FFFFFF" fill-opacity="0.12" stroke="#FFFFFF" stroke-opacity="0.22" stroke-width="2"/>
+  <path d="M142 214H160V286H142V214Z" fill="#FFFFFF"/>
+  <path d="M206 214L170 249L208 286H184L159 260V240L183 214H206Z" fill="url(#kStroke)"/>
+  <text x="276" y="252" fill="#FFFFFF" font-family="DejaVu Sans, Arial, sans-serif" font-size="82" font-weight="700" letter-spacing="2">KLORIX</text>
+  <text x="278" y="308" fill="#BAE6FD" font-family="DejaVu Sans, Arial, sans-serif" font-size="32" font-weight="600">Connect. Share. Belong.</text>
+  <text x="108" y="408" fill="#D1FAE5" font-family="DejaVu Sans, Arial, sans-serif" font-size="27">KLORIX Community — Real-time social feed, group chat, reactions &amp; video embeds.</text>
+  <rect x="108" y="458" width="380" height="48" rx="24" fill="#FFFFFF" fill-opacity="0.12"/>
+  <text x="136" y="490" fill="#FFFFFF" font-family="DejaVu Sans, Arial, sans-serif" font-size="22" font-weight="600">klorixcommunity.vercel.app</text>
 </svg>

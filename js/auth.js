@@ -1,6 +1,6 @@
 /**
- * HMM HMM — Authentication, User Profile Services & Auth Views (Login / Register / Forgot)
- * Classic script (works directly via file:// and HTTP/HTTPS).
+ * KLORIX — Authentication, User Profile Services & Auth Views (Login / Register / Forgot)
+ * Classic script (works directly via file://, Vercel, and cPanel).
  */
 (function (HMM) {
   "use strict";
@@ -176,9 +176,9 @@
 
   function generateDefaultUsername(name, uid) {
     var base = U.normalizeUsername(String(name || "").replace(/\s+/g, "_")).slice(0, 12) || "member";
-    var suffix = String(uid || "").toLowerCase().replace(/[^a-z0-9]/g, "").slice(0, 4) || "bd01";
+    var suffix = String(uid || "").toLowerCase().replace(/[^a-z0-9]/g, "").slice(0, 4) || "kx01";
     var candidate = (base + "_" + suffix).slice(0, 20);
-    return candidate.length >= 3 ? candidate : "hmm_" + suffix;
+    return candidate.length >= 3 ? candidate : "kx_" + suffix;
   }
 
   async function createUserProfile(params) {
@@ -297,7 +297,11 @@
       .get();
     return snap.docs
       .map(function (d) { return d.data(); })
-      .filter(function (u) { return u.uid !== excludeUid && !u.isSuspended; })
+      .filter(function (u) {
+        if (u.uid === excludeUid || u.isSuspended) return false;
+        if (HMM.blocks && HMM.blocks.isEitherBlocked(u.uid)) return false;
+        return true;
+      })
       .sort(function (a, b) { return (b.followersCount || 0) - (a.followersCount || 0); })
       .slice(0, cap);
   }
@@ -316,6 +320,7 @@
       .filter(function (u) {
         if (excludeUid && u.uid === excludeUid) return false;
         if (u.isSuspended) return false;
+        if (HMM.blocks && HMM.blocks.isEitherBlocked(u.uid)) return false;
         return (
           String(u.username || "").toLowerCase().indexOf(normalizedHandle) !== -1 ||
           String(u.name || "").toLowerCase().indexOf(term) !== -1 ||
@@ -552,7 +557,7 @@
           } catch (err) {
             showError(U.getFriendlyErrorMessage(err));
             btn.disabled = false;
-            btn.textContent = "Create HMM HMM account";
+            btn.textContent = "Create " + HMM.siteConfig.get().siteName + " account";
           }
         });
       }

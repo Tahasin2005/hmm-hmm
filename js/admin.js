@@ -1,10 +1,12 @@
 /**
- * HMM HMM — Admin & Moderation Console (#admin)
+ * KLORIX (window.HMM) — Admin & Moderation Console (#admin) + Admin View-As Account Inspector (#inspect)
  * Features:
  * 1. AI Bulk Moderation (Google AI Studio API Key, On/Off Toggle, Batch Scan Posts & Comments -> Trash)
  * 2. Admin Trash Bin (View Trashed Items, Restore to Feed/Comments, Permanently Delete)
- * 3. Dynamic Site Branding & SEO Settings (Upload/URL Logo, Favicon, Site Name, Meta Description & Keywords)
- * 4. Reports, Users (Suspend/Unsuspend), and Posts Moderation
+ * 3. Feed Ads & Videos Manager (Anonymous YouTube/Facebook embeds or Image Ads interleaved every N posts)
+ * 4. Official Home Feed Announcements Manager (Pinned notices with optional images)
+ * 5. Dynamic Site Branding & SEO Settings (Upload/URL Logo, Favicon, Site Name, Meta Description & Keywords)
+ * 6. Users (View As Account Inspector + Suspend/Unsuspend), Reports & Posts Moderation
  * 100% Mobile, Tablet & Desktop Responsive.
  */
 (function (HMM) {
@@ -28,6 +30,8 @@
       HMM.db.collection("trash").limit(120).get().catch(function () { return { docs: [] }; }),
       HMM.db.collection("adminConfig").doc("aiModeration").get().catch(function () { return { exists: false }; }),
       HMM.db.collection("siteConfig").doc("general").get().catch(function () { return { exists: false }; }),
+      HMM.announcements.getAll().catch(function () { return []; }),
+      HMM.promos.getAll().catch(function () { return []; }),
     ]);
 
     return {
@@ -52,6 +56,8 @@
       siteConfig: results[6].exists
         ? Object.assign({}, HMM.siteConfig.DEFAULT, results[6].data())
         : HMM.siteConfig.get(),
+      announcements: results[7] || [],
+      promos: results[8] || [],
     };
   }
 
@@ -79,7 +85,6 @@
     batch.delete(HMM.db.collection(originalCollection).doc(originalId));
     await batch.commit();
 
-    // Safely decrement counters if possible (ignore if parent already deleted)
     try {
       if (itemType === "post" && docData.authorId) {
         await HMM.db.collection("users").doc(docData.authorId).update({
@@ -144,7 +149,7 @@
     });
 
     var systemPrompt =
-      "You are an automated content moderation classifier for HMM HMM, a Bangladeshi community social network (content may be in English, Bengali, or Banglish). " +
+      "You are an automated content moderation classifier for KLORIX Community, a social network (content may be in English, Bengali, or Banglish). " +
       "Inspect each post/comment in the JSON array and flag ONLY genuinely toxic, abusive, hate speech, harassment, violent threats, scams, or spam content. " +
       "Do NOT flag normal friendly conversation, jokes, or benign opinions. " +
       'Return ONLY a valid JSON array where each element has: {"id": string, "flagged": boolean, "category": string, "reason": string}. ' +
@@ -212,7 +217,7 @@
   }
 
   // ============================================================================
-  // ADMIN CONSOLE VIEW CONTROLLER
+  // ADMIN CONSOLE VIEW CONTROLLER (#admin)
   // ============================================================================
   async function mountAdminView(ctx) {
     if (!ctx.isAdmin) {
@@ -236,24 +241,30 @@
       trash: [],
       aiConfig: Object.assign({}, DEFAULT_AI_CONFIG),
       siteConfig: HMM.siteConfig.get(),
+      announcements: [],
+      promos: [],
     };
 
     ctx.mainEl.innerHTML =
       '<div class="page-header"><div><h1 class="page-title">Admin &amp; Moderation Console</h1>' +
-      '<p class="page-subtitle">AI bulk moderation, recycle bin, dynamic site branding, SEO, and community governance.</p></div>' +
+      '<p class="page-subtitle">AI bulk moderation, anonymous feed promos/videos, announcements, branding, and account inspector.</p></div>' +
       '<button type="button" id="admin-refresh-btn" class="btn btn-secondary btn-sm">Refresh data</button></div>' +
       '<div class="kpi-grid" id="admin-kpi-grid"></div>' +
       '<div class="card admin-console-card"><div class="tabs" id="admin-tabs">' +
       '<button type="button" class="tab-btn active" data-tab="ai">' + U.ICONS.cpu + " AI Moderation</button>" +
+      '<button type="button" class="tab-btn" data-tab="promos">' + U.ICONS.video + ' Feed Ads &amp; Videos <span class="tab-count" id="adm-cnt-promos">0</span></button>' +
+      '<button type="button" class="tab-btn" data-tab="announcements">' + U.ICONS.megaphone + ' Announcements <span class="tab-count" id="adm-cnt-ann">0</span></button>' +
+      '<button type="button" class="tab-btn" data-tab="users">' + U.ICONS.users + ' Users <span class="tab-count" id="adm-cnt-users">0</span></button>' +
       '<button type="button" class="tab-btn" data-tab="trash">' + U.ICONS.trash + ' Trash <span class="tab-count" id="adm-cnt-trash">0</span></button>' +
       '<button type="button" class="tab-btn" data-tab="branding">' + U.ICONS.globe + " Branding &amp; SEO</button>" +
       '<button type="button" class="tab-btn" data-tab="reports">Reports <span class="tab-count" id="adm-cnt-reports">0</span></button>' +
-      '<button type="button" class="tab-btn" data-tab="users">Users <span class="tab-count" id="adm-cnt-users">0</span></button>' +
       '<button type="button" class="tab-btn" data-tab="posts">Posts <span class="tab-count" id="adm-cnt-posts">0</span></button>' +
       '</div><div id="admin-panel" class="admin-panel-body"><p class="text-muted">Loading admin console...</p></div></div>';
 
     function renderKpis() {
       var openReports = data.reports.filter(function (r) { return r.status === "open"; }).length;
+      document.getElementById("adm-cnt-promos").textContent = String(data.promos.length);
+      document.getElementById("adm-cnt-ann").textContent = String(data.announcements.length);
       document.getElementById("adm-cnt-trash").textContent = String(data.trash.length);
       document.getElementById("adm-cnt-reports").textContent = String(data.reports.length);
       document.getElementById("adm-cnt-users").textContent = String(data.users.length);
@@ -263,7 +274,8 @@
         '<div class="kpi-card"><div class="kpi-label">AI Moderation</div><div class="kpi-value" style="font-size:20px;color:' +
         (data.aiConfig.enabled ? "var(--accent)" : "var(--text-muted)") + ';">' +
         (data.aiConfig.enabled ? "Active" : "Paused") + "</div></div>" +
-        '<div class="kpi-card"><div class="kpi-label">Trash Items</div><div class="kpi-value" style="color:var(--crimson);">' + data.trash.length + "</div></div>" +
+        '<div class="kpi-card"><div class="kpi-label">Active Feed Slots</div><div class="kpi-value" style="color:var(--accent);">' +
+        data.promos.filter(function (p) { return p.isActive; }).length + "</div></div>" +
         '<div class="kpi-card"><div class="kpi-label">Open Reports</div><div class="kpi-value" style="color:var(--amber);">' + openReports + "</div></div>" +
         '<div class="kpi-card"><div class="kpi-label">Posts &amp; Users</div><div class="kpi-value">' + data.posts.length + " / " + data.users.length + "</div></div>";
     }
@@ -331,7 +343,6 @@
           : "") +
         "</div></div>";
 
-      // Wire events for AI tab
       var keyInput = document.getElementById("ai-api-key");
       document.getElementById("ai-toggle-key-vis").addEventListener("click", function (e) {
         var isPwd = keyInput.type === "password";
@@ -425,7 +436,6 @@
         progWrap.classList.remove("hidden");
 
         try {
-          // Fetch fresh posts & comments
           var fresh = await Promise.all([
             HMM.db.collection("posts").limit(120).get(),
             HMM.db.collection("comments").limit(150).get(),
@@ -435,7 +445,7 @@
 
           var queue = [];
           postsList.forEach(function (p) {
-            queue.push({ id: "post:" + p.postId, type: "post", author: p.authorName, text: p.text, raw: p });
+            if (p.text) queue.push({ id: "post:" + p.postId, type: "post", author: p.authorName, text: p.text, raw: p });
           });
           commentsList.forEach(function (c) {
             queue.push({ id: "comment:" + c.commentId, type: "comment", author: c.authorName, text: c.text, raw: c });
@@ -512,6 +522,192 @@
       });
     }
 
+    // ============================================================================
+    // ANONYMOUS IN-FEED PROMOS / VIDEOS & ADS TAB
+    // ============================================================================
+    function renderPromosTab(panel) {
+      var uploadedPromoImg = "";
+
+      panel.innerHTML =
+        '<div class="admin-grid-2">' +
+        '<div class="admin-section-box">' +
+        "<h3>Add Anonymous In-Feed Video or Ad</h3>" +
+        '<p class="text-muted" style="font-size:13px;margin:4px 0 14px;">Automatically injected between community posts on the Home Feed with <strong>no author name or profile avatar</strong>.</p>' +
+        '<form id="promo-create-form" class="auth-form">' +
+        '<div class="form-group"><label class="form-label" for="pr-type">Slot Type</label>' +
+        '<select id="pr-type" class="form-select">' +
+        '<option value="embed">Embedded Video (YouTube / Facebook / Vimeo)</option>' +
+        '<option value="image_ad">Image Banner Ad</option></select></div>' +
+        '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">' +
+        '<div class="form-group"><label class="form-label" for="pr-label">Top Badge Label</label>' +
+        '<input id="pr-label" class="form-input" type="text" maxlength="40" value="Featured" placeholder="Featured / Sponsored" /></div>' +
+        '<div class="form-group"><label class="form-label" for="pr-interval">Show Every N Posts</label>' +
+        '<input id="pr-interval" class="form-input" type="number" min="1" max="50" value="4" required /></div></div>' +
+        '<div class="form-group"><label class="form-label" for="pr-title">Headline (optional)</label>' +
+        '<input id="pr-title" class="form-input" type="text" maxlength="140" placeholder="e.g., Trending Highlight" /></div>' +
+        '<div class="form-group"><label class="form-label" for="pr-caption">Caption (optional)</label>' +
+        '<textarea id="pr-caption" class="form-textarea" rows="2" maxlength="600" placeholder="Short description or message..."></textarea></div>' +
+        '<div class="form-group" id="pr-embed-group"><label class="form-label" for="pr-embed-raw">YouTube or Facebook Embed Code / Video URL</label>' +
+        '<textarea id="pr-embed-raw" class="form-textarea font-mono" rows="2" placeholder=\'<iframe src="https://www.youtube.com/embed/..."></iframe> or video link\'></textarea>' +
+        '<div id="pr-embed-preview" style="margin-top:8px;"></div></div>' +
+        '<div class="form-group hidden" id="pr-image-group"><label class="form-label">Ad Banner Image (Upload or URL)</label>' +
+        '<input id="pr-image-url" class="form-input" type="text" placeholder="https://example.com/banner.jpg" style="margin-bottom:6px;" />' +
+        '<input id="pr-image-file" type="file" accept="image/*" style="font-size:12.5px;" />' +
+        '<div id="pr-image-preview" style="margin-top:8px;"></div></div>' +
+        '<div style="display:grid;grid-template-columns:1.3fr 1fr;gap:10px;">' +
+        '<div class="form-group"><label class="form-label" for="pr-cta-url">CTA Link URL (optional)</label>' +
+        '<input id="pr-cta-url" class="form-input" type="url" placeholder="https://..." /></div>' +
+        '<div class="form-group"><label class="form-label" for="pr-cta-text">Button Label</label>' +
+        '<input id="pr-cta-text" class="form-input" type="text" maxlength="40" placeholder="Learn more" /></div></div>' +
+        '<button type="submit" id="pr-submit-btn" class="btn btn-primary" style="margin-top:6px;">' + U.ICONS.sparkles + " Publish to Home Feed</button>" +
+        "</form></div>" +
+
+        '<div class="admin-section-box">' +
+        "<h3>Active &amp; Saved Feed Slots (" + data.promos.length + ")</h3>" +
+        '<p class="text-muted" style="font-size:13px;margin:4px 0 12px;">Active slots rotate automatically between posts on every user\'s Home Feed.</p>' +
+        (data.promos.length === 0
+          ? '<div class="empty-state" style="padding:28px 12px;"><p>No in-feed videos or ads added yet.</p></div>'
+          : '<div class="promo-admin-list">' +
+            data.promos
+              .map(function (pr) {
+                return (
+                  '<div class="promo-admin-item">' +
+                  '<div class="promo-admin-head">' +
+                  '<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">' +
+                  '<span class="status-tag ' + (pr.isActive ? "status-resolved" : "status-dismissed") + '">' + (pr.isActive ? "Active" : "Paused") + "</span>" +
+                  '<span class="status-tag status-open">' + U.escapeHtml(pr.label || "Featured") + "</span>" +
+                  '<span class="text-muted" style="font-size:12px;">Every ' + (pr.intervalPosts || 4) + " posts · " +
+                  (pr.promoType === "embed" ? U.escapeHtml(pr.embedProvider || "video") : "image ad") + "</span></div>" +
+                  '<div style="display:flex;gap:6px;">' +
+                  '<button type="button" class="btn btn-secondary btn-sm" data-promo-toggle="' + U.escapeHtml(pr.promoId) + '" data-active="' + (pr.isActive ? "1" : "0") + '">' + (pr.isActive ? "Pause" : "Activate") + "</button>" +
+                  '<button type="button" class="btn btn-danger-soft btn-sm" data-promo-del="' + U.escapeHtml(pr.promoId) + '">' + U.ICONS.trash + "</button>" +
+                  "</div></div>" +
+                  (pr.title ? '<div style="font-weight:700;font-size:14px;margin-top:6px;">' + U.escapeHtml(pr.title) + "</div>" : "") +
+                  (pr.caption ? '<div class="text-muted" style="font-size:13px;margin-top:2px;">' + U.escapeHtml(pr.caption.slice(0, 140)) + "</div>" : "") +
+                  (pr.promoType === "image_ad" && pr.imageUrl
+                    ? '<img src="' + U.escapeHtml(pr.imageUrl) + '" alt="" style="max-height:110px;border-radius:8px;margin-top:8px;object-fit:cover;" />'
+                    : pr.embedUrl
+                    ? '<div class="font-mono text-muted" style="font-size:11.5px;margin-top:6px;word-break:break-all;">' + U.escapeHtml(pr.embedUrl) + "</div>"
+                    : "") +
+                  "</div>"
+                );
+              })
+              .join("") +
+            "</div>") +
+        "</div></div>";
+
+      var typeSel = document.getElementById("pr-type");
+      var embedGrp = document.getElementById("pr-embed-group");
+      var imgGrp = document.getElementById("pr-image-group");
+      var embedRaw = document.getElementById("pr-embed-raw");
+      var embedPrev = document.getElementById("pr-embed-preview");
+      var imgUrl = document.getElementById("pr-image-url");
+      var imgFile = document.getElementById("pr-image-file");
+      var imgPrev = document.getElementById("pr-image-preview");
+
+      typeSel.addEventListener("change", function () {
+        var isImg = typeSel.value === "image_ad";
+        embedGrp.classList.toggle("hidden", isImg);
+        imgGrp.classList.toggle("hidden", !isImg);
+      });
+
+      embedRaw.addEventListener("input", function () {
+        var parsed = U.parseSafeEmbedInput(embedRaw.value);
+        embedPrev.innerHTML = parsed
+          ? U.renderEmbedPlayerHtml(parsed)
+          : embedRaw.value.trim()
+          ? '<p class="text-danger" style="font-size:12.5px;">Unrecognized embed URL/iframe.</p>'
+          : "";
+      });
+
+      imgFile.addEventListener("change", async function () {
+        var f = imgFile.files && imgFile.files[0];
+        if (!f) return;
+        try {
+          uploadedPromoImg = await U.compressImageFileToDataUrl(f, 960, 0.82, 310000);
+          imgUrl.value = "";
+          imgPrev.innerHTML = '<img src="' + U.escapeHtml(uploadedPromoImg) + '" alt="Preview" style="max-height:150px;border-radius:10px;border:1px solid var(--border);" />';
+          U.showToast("Ad image ready!", "success");
+        } catch (err) {
+          U.showToast(err.message, "error");
+        }
+      });
+
+      imgUrl.addEventListener("input", function () {
+        uploadedPromoImg = "";
+        var v = imgUrl.value.trim();
+        imgPrev.innerHTML =
+          v && U.validateOptionalUrl(v) === null
+            ? '<img src="' + U.escapeHtml(v) + '" alt="Preview" style="max-height:150px;border-radius:10px;border:1px solid var(--border);" />'
+            : "";
+      });
+
+      document.getElementById("promo-create-form").addEventListener("submit", async function (e) {
+        e.preventDefault();
+        var btn = document.getElementById("pr-submit-btn");
+        btn.disabled = true;
+        try {
+          await HMM.promos.create({
+            promoType: typeSel.value,
+            label: document.getElementById("pr-label").value,
+            intervalPosts: document.getElementById("pr-interval").value,
+            title: document.getElementById("pr-title").value,
+            caption: document.getElementById("pr-caption").value,
+            embedRaw: embedRaw.value,
+            imageUrl: uploadedPromoImg || imgUrl.value.trim(),
+            ctaUrl: document.getElementById("pr-cta-url").value,
+            ctaText: document.getElementById("pr-cta-text").value,
+            isActive: true,
+          });
+          U.showToast("In-feed promo published!", "success");
+          await loadAll();
+        } catch (err) {
+          U.showToast(U.getFriendlyErrorMessage(err), "error");
+          btn.disabled = false;
+        }
+      });
+    }
+
+    // ============================================================================
+    // ANNOUNCEMENTS TAB
+    // ============================================================================
+    function renderAnnouncementsTab(panel) {
+      panel.innerHTML =
+        '<div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:16px;">' +
+        '<div><h3 style="font-size:16px;font-weight:800;">Official Home Feed Announcements</h3>' +
+        '<p class="text-muted" style="font-size:13px;">Synced with your Official Admin Profile. Pinned announcements appear at the top of everyone\'s Home Feed.</p></div>' +
+        '<button type="button" id="btn-adm-new-ann" class="btn btn-primary btn-sm">' + U.ICONS.megaphone + " New Announcement</button></div>" +
+        (data.announcements.length === 0
+          ? '<div class="empty-state"><div class="empty-state-icon">' + U.ICONS.megaphone + "</div><h3>No announcements yet</h3><p>Publish an official announcement with optional banner image.</p></div>"
+          : '<div class="trash-list">' +
+            data.announcements
+              .map(function (a) {
+                var safeImg = U.safeAvatarUrl(a.imageUrl || "");
+                return (
+                  '<div class="trash-item-card">' +
+                  '<div class="trash-item-top">' +
+                  '<div class="trash-item-meta">' +
+                  '<span class="status-tag ' + (a.isActive ? "status-resolved" : "status-dismissed") + '">' + (a.isActive ? "Pinned Live" : "Hidden") + "</span>" +
+                  '<span class="text-muted" style="font-size:12.5px;">' + U.escapeHtml(U.formatRelativeTime(a.createdAt)) + "</span></div>" +
+                  '<div class="trash-item-actions">' +
+                  '<button type="button" class="btn btn-secondary btn-sm" data-adm-ann-toggle="' + U.escapeHtml(a.announcementId) + '" data-active="' + (a.isActive ? "1" : "0") + '">' + (a.isActive ? "Hide" : "Show Live") + "</button>" +
+                  '<button type="button" class="btn btn-secondary btn-sm" data-adm-ann-edit="' + U.escapeHtml(a.announcementId) + '">' + U.ICONS.edit + " Edit</button>" +
+                  '<button type="button" class="btn btn-danger-soft btn-sm" data-adm-ann-del="' + U.escapeHtml(a.announcementId) + '">' + U.ICONS.trash + " Delete</button>" +
+                  "</div></div>" +
+                  '<div style="font-weight:800;font-size:15px;margin-top:6px;">' + U.escapeHtml(a.title) + "</div>" +
+                  '<div class="trash-item-content" style="margin-top:4px;">' + U.escapeHtml(a.message) + "</div>" +
+                  (safeImg ? '<img src="' + U.escapeHtml(safeImg) + '" alt="" style="max-height:160px;border-radius:10px;margin-top:8px;object-fit:cover;" />' : "") +
+                  "</div>"
+                );
+              })
+              .join("") +
+            "</div>");
+
+      document.getElementById("btn-adm-new-ann").addEventListener("click", function () {
+        HMM.announcements.openCreateEditModal(ctx.profile, null, loadAll);
+      });
+    }
+
     function renderTrashTab(panel) {
       if (data.trash.length === 0) {
         panel.innerHTML =
@@ -580,7 +776,7 @@
 
         '<div class="admin-section-box">' +
         "<h3>SEO Meta Tags</h3>" +
-        '<p class="text-muted" style="font-size:13px;margin:4px 0 14px;">Dynamically updates &lt;title&gt;, meta description, keywords, and OpenGraph social share tags.</p>' +
+        '<p class="text-muted" style="font-size:13px;margin:4px 0 14px;">Dynamically updates &lt;title&gt;, meta description, keywords, and OpenGraph tags.</p>' +
         '<div class="form-group"><label class="form-label" for="sc-meta-desc">SEO Meta Description</label>' +
         '<textarea id="sc-meta-desc" class="form-textarea" maxlength="320">' + U.escapeHtml(cfg.metaDescription) + "</textarea>" +
         '<span class="form-hint">Recommended: 120–160 characters for search engines.</span></div>' +
@@ -588,7 +784,7 @@
         '<textarea id="sc-meta-keys" class="form-textarea" style="min-height:76px;" maxlength="320">' + U.escapeHtml(cfg.metaKeywords) + "</textarea></div>" +
         '<div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:16px;">' +
         '<button type="submit" id="sc-save-btn" class="btn btn-primary">Save &amp; Apply Globally</button>' +
-        '<button type="button" id="sc-reset-btn" class="btn btn-secondary">Reset Defaults</button>' +
+        '<button type="button" id="sc-reset-btn" class="btn btn-secondary">Reset KLORIX Defaults</button>' +
         "</div></div></div></form>";
 
       var logoUrlInp = document.getElementById("sc-logo-url");
@@ -638,7 +834,7 @@
           await HMM.db.collection("siteConfig").doc("general").set(resetPayload, { merge: true });
           HMM.siteConfig.applyToDom(HMM.siteConfig.DEFAULT);
           HMM.siteConfig.saveCache(HMM.siteConfig.DEFAULT);
-          U.showToast("Site branding reset to defaults.", "success");
+          U.showToast("Site branding reset to KLORIX defaults.", "success");
           await loadAll();
         } catch (err) {
           U.showToast(U.getFriendlyErrorMessage(err), "error");
@@ -652,7 +848,7 @@
         btn.textContent = "Applying...";
         try {
           var nextCfg = {
-            siteName: U.sanitizeText(document.getElementById("sc-name").value, 80) || "HMM HMM",
+            siteName: U.sanitizeText(document.getElementById("sc-name").value, 80) || "KLORIX",
             tagline: U.sanitizeText(document.getElementById("sc-tagline").value, 140),
             logoUrl: (uploadedLogo || logoUrlInp.value.trim()) || HMM.siteConfig.DEFAULT.logoUrl,
             faviconUrl: (uploadedFavicon || favUrlInp.value.trim()) || HMM.siteConfig.DEFAULT.faviconUrl,
@@ -681,18 +877,11 @@
       var panel = document.getElementById("admin-panel");
       if (!panel) return;
 
-      if (activeTab === "ai") {
-        renderAiTab(panel);
-        return;
-      }
-      if (activeTab === "trash") {
-        renderTrashTab(panel);
-        return;
-      }
-      if (activeTab === "branding") {
-        renderBrandingTab(panel);
-        return;
-      }
+      if (activeTab === "ai") { renderAiTab(panel); return; }
+      if (activeTab === "promos") { renderPromosTab(panel); return; }
+      if (activeTab === "announcements") { renderAnnouncementsTab(panel); return; }
+      if (activeTab === "trash") { renderTrashTab(panel); return; }
+      if (activeTab === "branding") { renderBrandingTab(panel); return; }
 
       if (activeTab === "reports") {
         if (data.reports.length === 0) {
@@ -725,7 +914,7 @@
       } else if (activeTab === "users") {
         panel.innerHTML =
           '<div class="data-table-wrap"><table class="data-table responsive-table"><thead><tr>' +
-          "<th>Member</th><th>Location</th><th>Stats</th><th>Status</th><th>Action</th></tr></thead><tbody>" +
+          "<th>Member</th><th>Location</th><th>Stats</th><th>Status</th><th>Actions</th></tr></thead><tbody>" +
           data.users
             .map(function (u) {
               var isSelf = u.uid === ctx.user.uid;
@@ -738,11 +927,12 @@
                 '<td data-label="Location" class="text-muted">' + U.escapeHtml(u.location || "—") + "</td>" +
                 '<td data-label="Stats" class="tabular-nums text-muted" style="font-size:12.5px;">' + (u.postsCount || 0) + " posts · " + (u.friendsCount || 0) + " friends</td>" +
                 '<td data-label="Status">' + (u.isSuspended ? '<span class="status-tag status-suspended">Suspended</span>' : '<span class="status-tag status-resolved">Active</span>') + "</td>" +
-                '<td data-label="Action">' +
+                '<td data-label="Actions"><div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;">' +
+                '<a href="#inspect?uid=' + encodeURIComponent(u.uid) + '" class="btn btn-outline btn-sm" title="Inspect account read-only">' + U.ICONS.eye + " View As</a>" +
                 (isSelf
-                  ? '<span class="text-muted" style="font-size:12px;">You (Admin)</span>'
+                  ? '<span class="text-muted" style="font-size:12px;">You</span>'
                   : '<button type="button" class="btn ' + (u.isSuspended ? "btn-primary" : "btn-danger-soft") + ' btn-sm" data-toggle-suspend="' + U.escapeHtml(u.uid) + '" data-suspended="' + (u.isSuspended ? "1" : "0") + '">' + (u.isSuspended ? "Unsuspend" : "Suspend") + "</button>") +
-                "</td></tr>"
+                "</div></td></tr>"
               );
             })
             .join("") +
@@ -757,7 +947,7 @@
           "<th>Author</th><th>Content</th><th>Engagement</th><th>Posted</th><th>Actions</th></tr></thead><tbody>" +
           data.posts
             .map(function (p) {
-              var txt = String(p.text || "");
+              var txt = String(p.text || (p.postType === "embed" ? "[Embedded " + (p.embedProvider || "video") + "]" : ""));
               return (
                 '<tr><td data-label="Author"><a href="#profile?uid=' + encodeURIComponent(p.authorId) + '"><strong>' + U.escapeHtml(p.authorName) + '</strong><br/><span class="text-muted" style="font-size:12px;">@' + U.escapeHtml(p.authorUsername) + "</span></a></td>" +
                 '<td data-label="Content" style="max-width:340px;word-break:break-word;">' + U.escapeHtml(txt.slice(0, 180)) + (txt.length > 180 ? "…" : "") + "</td>" +
@@ -800,6 +990,71 @@
     });
 
     document.getElementById("admin-panel").addEventListener("click", async function (e) {
+      var promoToggle = e.target.closest("[data-promo-toggle]");
+      if (promoToggle) {
+        promoToggle.disabled = true;
+        try {
+          var nextOn = promoToggle.dataset.active !== "1";
+          await HMM.promos.update(promoToggle.dataset.promoToggle, { isActive: nextOn });
+          U.showToast(nextOn ? "Feed slot activated." : "Feed slot paused.", "success");
+          await loadAll();
+        } catch (err) {
+          U.showToast(U.getFriendlyErrorMessage(err), "error");
+          promoToggle.disabled = false;
+        }
+        return;
+      }
+
+      var promoDel = e.target.closest("[data-promo-del]");
+      if (promoDel) {
+        promoDel.disabled = true;
+        try {
+          await HMM.promos.remove(promoDel.dataset.promoDel);
+          U.showToast("Feed slot deleted.", "success");
+          await loadAll();
+        } catch (err) {
+          U.showToast(U.getFriendlyErrorMessage(err), "error");
+          promoDel.disabled = false;
+        }
+        return;
+      }
+
+      var annToggle = e.target.closest("[data-adm-ann-toggle]");
+      if (annToggle) {
+        annToggle.disabled = true;
+        try {
+          var nextA = annToggle.dataset.active !== "1";
+          await HMM.announcements.update(annToggle.dataset.admAnnToggle, { isActive: nextA });
+          U.showToast(nextA ? "Announcement pinned live." : "Announcement hidden.", "success");
+          await loadAll();
+        } catch (err) {
+          U.showToast(U.getFriendlyErrorMessage(err), "error");
+          annToggle.disabled = false;
+        }
+        return;
+      }
+
+      var annEdit = e.target.closest("[data-adm-ann-edit]");
+      if (annEdit) {
+        var foundAnn = data.announcements.find(function (a) { return a.announcementId === annEdit.dataset.admAnnEdit; });
+        if (foundAnn) HMM.announcements.openCreateEditModal(ctx.profile, foundAnn, loadAll);
+        return;
+      }
+
+      var annDel = e.target.closest("[data-adm-ann-del]");
+      if (annDel) {
+        annDel.disabled = true;
+        try {
+          await HMM.announcements.remove(annDel.dataset.admAnnDel);
+          U.showToast("Announcement deleted.", "success");
+          await loadAll();
+        } catch (err) {
+          U.showToast(U.getFriendlyErrorMessage(err), "error");
+          annDel.disabled = false;
+        }
+        return;
+      }
+
       var restoreBtn = e.target.closest("[data-restore-trash]");
       if (restoreBtn) {
         var tid = restoreBtn.dataset.restoreTrash;
@@ -871,11 +1126,11 @@
       var trashPostBtn = e.target.closest("[data-admin-trash-post]");
       if (trashPostBtn) {
         var tpid = trashPostBtn.dataset.adminTrashPost;
-        var postObj = data.posts.find(function (p) { return p.postId === tpid; });
-        if (!postObj) return;
+        var pDoc = data.posts.find(function (p) { return p.postId === tpid; });
+        if (!pDoc) return;
         trashPostBtn.disabled = true;
         try {
-          await moveItemToTrash("post", postObj, "Moved to Trash by Administrator", "Manual Moderation", "admin", ctx.user.uid);
+          await moveItemToTrash("post", pDoc, "Moved to Trash by Administrator", "Manual Moderation", "admin", ctx.user.uid);
           U.showToast("Post moved to Trash.", "success");
           await loadAll();
         } catch (err) {
@@ -890,7 +1145,7 @@
         delPostBtn.disabled = true;
         try {
           await HMM.db.collection("posts").doc(delPostBtn.dataset.adminDelPost).delete();
-          U.showToast("Post permanently deleted.", "success");
+          U.showToast("Post permanently removed.", "success");
           await loadAll();
         } catch (err) {
           U.showToast(U.getFriendlyErrorMessage(err), "error");
@@ -902,5 +1157,332 @@
     await loadAll();
   }
 
-  HMM.admin = { mountView: mountAdminView };
+  // ============================================================================
+  // ADMIN "VIEW AS USER" READ-ONLY ACCOUNT INSPECTOR (#inspect?uid=<uid>)
+  // ============================================================================
+  async function mountInspectUserView(ctx, params) {
+    if (!ctx.isAdmin) {
+      ctx.mainEl.innerHTML =
+        '<div class="card empty-state"><h3>Admin access required</h3>' +
+        '<p>Account Inspector is restricted to authorized administrators.</p>' +
+        '<a href="#feed" class="btn btn-primary btn-sm">Back to Feed</a></div>';
+      return;
+    }
+
+    var targetUid = params ? params.get("uid") : "";
+    if (!targetUid) {
+      U.navigateTo("admin");
+      return;
+    }
+
+    ctx.mainEl.innerHTML =
+      '<div class="card empty-state"><div class="spinner"></div><p>Loading Account Inspector...</p></div>';
+
+    var targetProfile = await HMM.authService.getUserProfile(targetUid);
+    if (!targetProfile) {
+      ctx.mainEl.innerHTML =
+        '<div class="card empty-state"><h3>User not found</h3>' +
+        '<p>This account may have been deleted.</p>' +
+        '<a href="#admin" class="btn btn-primary btn-sm">Back to Admin Console</a></div>';
+      return;
+    }
+
+    var activeTab = "overview";
+    var inspected = {
+      privateAccount: null,
+      allPosts: [],
+      userPosts: [],
+      friendships: [],
+      incomingReqs: [],
+      outgoingReqs: [],
+      following: [],
+      followers: [],
+      notifications: [],
+      blocksOut: [],
+      blocksIn: [],
+      chats: [],
+      selectedChatMessages: [],
+      selectedChatTitle: "",
+      usersByUid: new Map(),
+    };
+
+    try {
+      var res = await Promise.all([
+        HMM.db.collection("users").doc(targetUid).collection("private").doc("account").get().catch(function () { return { exists: false }; }),
+        HMM.db.collection("posts").where("visibility", "==", "public").limit(50).get().catch(function () { return { docs: [] }; }),
+        HMM.db.collection("posts").where("authorId", "==", targetUid).limit(50).get().catch(function () { return { docs: [] }; }),
+        HMM.db.collection("friendships").where("participants", "array-contains", targetUid).limit(100).get().catch(function () { return { docs: [] }; }),
+        HMM.db.collection("friendRequests").where("receiverId", "==", targetUid).limit(50).get().catch(function () { return { docs: [] }; }),
+        HMM.db.collection("friendRequests").where("senderId", "==", targetUid).limit(50).get().catch(function () { return { docs: [] }; }),
+        HMM.db.collection("follows").where("followerId", "==", targetUid).limit(100).get().catch(function () { return { docs: [] }; }),
+        HMM.db.collection("follows").where("followingId", "==", targetUid).limit(100).get().catch(function () { return { docs: [] }; }),
+        HMM.db.collection("notifications").where("recipientId", "==", targetUid).limit(50).get().catch(function () { return { docs: [] }; }),
+        HMM.db.collection("blocks").where("blockerId", "==", targetUid).limit(50).get().catch(function () { return { docs: [] }; }),
+        HMM.db.collection("blocks").where("blockedId", "==", targetUid).limit(50).get().catch(function () { return { docs: [] }; }),
+        HMM.rtdb.ref("userChats/" + targetUid).once("value").catch(function () { return { val: function () { return null; } }; }),
+      ]);
+
+      inspected.privateAccount = res[0].exists ? res[0].data() : null;
+      inspected.allPosts = res[1].docs.map(function (d) { return d.data(); }).sort(function (a, b) { return U.timestampToMs(b.createdAt) - U.timestampToMs(a.createdAt); });
+      inspected.userPosts = res[2].docs.map(function (d) { return d.data(); }).sort(function (a, b) { return U.timestampToMs(b.createdAt) - U.timestampToMs(a.createdAt); });
+      inspected.friendships = res[3].docs.map(function (d) { return d.data(); });
+      inspected.incomingReqs = res[4].docs.map(function (d) { return d.data(); }).filter(function (r) { return r.status === "pending"; });
+      inspected.outgoingReqs = res[5].docs.map(function (d) { return d.data(); }).filter(function (r) { return r.status === "pending"; });
+      inspected.following = res[6].docs.map(function (d) { return d.data(); });
+      inspected.followers = res[7].docs.map(function (d) { return d.data(); });
+      inspected.notifications = res[8].docs.map(function (d) { return d.data(); }).sort(function (a, b) { return U.timestampToMs(b.createdAt) - U.timestampToMs(a.createdAt); });
+      inspected.blocksOut = res[9].docs.map(function (d) { return d.data(); });
+      inspected.blocksIn = res[10].docs.map(function (d) { return d.data(); });
+      var chatVal = res[11] && typeof res[11].val === "function" ? res[11].val() : null;
+      inspected.chats = chatVal
+        ? Object.values(chatVal).sort(function (a, b) { return (b.lastMessageTime || 0) - (a.lastMessageTime || 0); })
+        : [];
+
+      // Preload related user profiles for network/blocks display
+      var relatedUids = [];
+      inspected.friendships.forEach(function (f) { relatedUids.push(f.user1Id === targetUid ? f.user2Id : f.user1Id); });
+      inspected.incomingReqs.forEach(function (r) { relatedUids.push(r.senderId); });
+      inspected.outgoingReqs.forEach(function (r) { relatedUids.push(r.receiverId); });
+      inspected.blocksIn.forEach(function (b) { relatedUids.push(b.blockerId); });
+      var loadedUsers = await HMM.authService.getUsersByIds(relatedUids);
+      loadedUsers.forEach(function (u) { inspected.usersByUid.set(u.uid, u); });
+    } catch (err) {
+      U.showToast(U.getFriendlyErrorMessage(err), "error");
+    }
+
+    var blockedSet = new Set();
+    inspected.blocksOut.forEach(function (b) { blockedSet.add(b.blockedId); });
+    inspected.blocksIn.forEach(function (b) { blockedSet.add(b.blockerId); });
+
+    ctx.mainEl.innerHTML =
+      '<div class="view-as-banner">' +
+      '<div class="view-as-banner-left">' +
+      '<span class="view-as-pill">' + U.ICONS.eye + " Admin Read-Only Preview</span>" +
+      '<span>Viewing KLORIX as <strong>' + U.escapeHtml(targetProfile.name) + '</strong> (@' + U.escapeHtml(targetProfile.username) + ")</span>" +
+      "</div>" +
+      '<a href="#admin" class="btn btn-secondary btn-sm">Exit View-As</a>' +
+      "</div>" +
+      '<div class="card admin-console-card">' +
+      '<div class="tabs" id="inspect-tabs">' +
+      '<button type="button" class="tab-btn active" data-itab="overview">Account Overview</button>' +
+      '<button type="button" class="tab-btn" data-itab="feed">Home Feed View</button>' +
+      '<button type="button" class="tab-btn" data-itab="posts">Posts <span class="tab-count">' + inspected.userPosts.length + "</span></button>" +
+      '<button type="button" class="tab-btn" data-itab="network">Friends &amp; Network <span class="tab-count">' + inspected.friendships.length + "</span></button>" +
+      '<button type="button" class="tab-btn" data-itab="notifs">Notifications <span class="tab-count">' + inspected.notifications.length + "</span></button>" +
+      '<button type="button" class="tab-btn" data-itab="blocks">Blocked Users <span class="tab-count">' + inspected.blocksOut.length + "</span></button>" +
+      '<button type="button" class="tab-btn" data-itab="chats">Chats <span class="tab-count">' + inspected.chats.length + "</span></button>" +
+      '</div><div id="inspect-panel" class="admin-panel-body"></div></div>';
+
+    var activePostManager = null;
+
+    function renderInspectTab() {
+      if (activePostManager) {
+        activePostManager.cleanup();
+        activePostManager = null;
+      }
+      var panel = document.getElementById("inspect-panel");
+      if (!panel) return;
+
+      if (activeTab === "overview") {
+        var email = (inspected.privateAccount && inspected.privateAccount.email) || "Not recorded";
+        panel.innerHTML =
+          '<div class="admin-grid-2">' +
+          '<div class="admin-section-box">' +
+          '<div style="display:flex;align-items:center;gap:14px;margin-bottom:14px;">' +
+          U.renderAvatarHtml({ name: targetProfile.name, avatarUrl: targetProfile.avatarUrl, avatarColor: targetProfile.avatarColor, size: "lg", isAdmin: U.isOfficialAdminUser(targetProfile) }) +
+          '<div><h3 style="font-size:18px;font-weight:800;">' + U.escapeHtml(targetProfile.name) + "</h3>" +
+          '<div class="text-muted">@' + U.escapeHtml(targetProfile.username) + "</div>" +
+          '<div style="margin-top:6px;">' + (targetProfile.isSuspended ? '<span class="status-tag status-suspended">Suspended</span>' : '<span class="status-tag status-resolved">Active</span>') + "</div></div></div>" +
+          '<div class="inspect-kv-list">' +
+          '<div><span>Private Email</span><strong class="font-mono" style="font-size:12.5px;">' + U.escapeHtml(email) + "</strong></div>" +
+          '<div><span>UID</span><strong class="font-mono" style="font-size:12px;">' + U.escapeHtml(targetProfile.uid) + "</strong></div>" +
+          '<div><span>Location</span><strong>' + U.escapeHtml(targetProfile.location || "—") + "</strong></div>" +
+          '<div><span>Visibility</span><strong>' + U.escapeHtml(targetProfile.visibility || "public") + "</strong></div>" +
+          '<div><span>Friend Requests</span><strong>' + U.escapeHtml(targetProfile.friendRequestPref || "everyone") + "</strong></div>" +
+          '<div><span>Joined</span><strong>' + U.escapeHtml(U.formatJoinDate(targetProfile.createdAt)) + "</strong></div>" +
+          "</div></div>" +
+          '<div class="admin-section-box">' +
+          "<h3>Profile Stats &amp; Bio</h3>" +
+          '<div class="kpi-grid" style="margin:12px 0;">' +
+          '<div class="kpi-card"><div class="kpi-label">Posts</div><div class="kpi-value">' + (targetProfile.postsCount || 0) + "</div></div>" +
+          '<div class="kpi-card"><div class="kpi-label">Friends</div><div class="kpi-value">' + (targetProfile.friendsCount || 0) + "</div></div>" +
+          '<div class="kpi-card"><div class="kpi-label">Followers</div><div class="kpi-value">' + (targetProfile.followersCount || 0) + "</div></div>" +
+          '<div class="kpi-card"><div class="kpi-label">Following</div><div class="kpi-value">' + (targetProfile.followingCount || 0) + "</div></div>" +
+          "</div>" +
+          '<p class="text-muted" style="font-size:13.5px;line-height:1.6;">' + U.escapeHtml(targetProfile.bio || "No bio set.") + "</p>" +
+          '<div style="margin-top:14px;"><a href="#profile?uid=' + encodeURIComponent(targetUid) + '" class="btn btn-secondary btn-sm">Open Public Profile</a></div>' +
+          "</div></div>";
+        return;
+      }
+
+      if (activeTab === "feed" || activeTab === "posts") {
+        panel.innerHTML =
+          '<p class="text-muted" style="font-size:13px;margin-bottom:12px;">' +
+          (activeTab === "feed"
+            ? "Showing the public Home Feed as seen by @" + U.escapeHtml(targetProfile.username) + " (filtered by their blocked accounts)."
+            : "All posts authored by @" + U.escapeHtml(targetProfile.username) + ".") +
+          '</p><div id="inspect-posts-box" style="display:flex;flex-direction:column;gap:14px;"></div>';
+
+        var list =
+          activeTab === "feed"
+            ? inspected.allPosts.filter(function (p) { return !blockedSet.has(p.authorId); })
+            : inspected.userPosts;
+
+        activePostManager = HMM.feed.createPostListManager({
+          container: document.getElementById("inspect-posts-box"),
+          ctx: ctx,
+          readOnly: true,
+          skipBlockFilter: true,
+        });
+        activePostManager.render(list, "No posts visible", "No posts in this view.");
+        return;
+      }
+
+      if (activeTab === "network") {
+        var friendRows = inspected.friendships.map(function (f) {
+          var fid = f.user1Id === targetUid ? f.user2Id : f.user1Id;
+          var u = inspected.usersByUid.get(fid);
+          return '<div class="user-row"><div class="user-row-left">' +
+            U.renderAvatarHtml({ name: u ? u.name : fid, avatarUrl: u ? u.avatarUrl : "", avatarColor: u ? u.avatarColor : "#006A4E", size: "sm" }) +
+            '<div class="user-row-meta"><span class="user-row-name">' + U.escapeHtml(u ? u.name : fid) + '</span>' +
+            '<span class="user-row-handle">@' + U.escapeHtml(u ? u.username : "member") + "</span></div></div>" +
+            '<a href="#inspect?uid=' + encodeURIComponent(fid) + '" class="btn btn-outline btn-sm">' + U.ICONS.eye + " Inspect</a></div>";
+        });
+        panel.innerHTML =
+          '<div class="admin-grid-2">' +
+          '<div class="admin-section-box"><h3>Friends (' + inspected.friendships.length + ")</h3>" +
+          (friendRows.length ? friendRows.join("") : '<p class="text-muted" style="font-size:13px;margin-top:8px;">No friends yet.</p>') +
+          "</div>" +
+          '<div class="admin-section-box"><h3>Network Summary</h3>' +
+          '<div class="inspect-kv-list" style="margin-top:10px;">' +
+          "<div><span>Incoming Pending Requests</span><strong>" + inspected.incomingReqs.length + "</strong></div>" +
+          "<div><span>Outgoing Pending Requests</span><strong>" + inspected.outgoingReqs.length + "</strong></div>" +
+          "<div><span>Following</span><strong>" + inspected.following.length + "</strong></div>" +
+          "<div><span>Followers</span><strong>" + inspected.followers.length + "</strong></div>" +
+          "</div></div></div>";
+        return;
+      }
+
+      if (activeTab === "notifs") {
+        if (inspected.notifications.length === 0) {
+          panel.innerHTML = '<div class="empty-state"><h3>No notifications</h3><p>This user has no notifications.</p></div>';
+          return;
+        }
+        panel.innerHTML =
+          '<div style="display:flex;flex-direction:column;gap:8px;">' +
+          inspected.notifications
+            .map(function (n) {
+              return (
+                '<div class="notif-item ' + (n.isRead ? "" : "unread") + '">' +
+                '<div class="notif-body"><div class="notif-text">' + U.escapeHtml(n.message) + "</div>" +
+                '<div class="notif-time">@' + U.escapeHtml(n.senderUsername || "user") + " · " + U.escapeHtml(n.type) + " · " + U.escapeHtml(U.formatRelativeTime(n.createdAt)) + "</div></div></div>"
+              );
+            })
+            .join("") +
+          "</div>";
+        return;
+      }
+
+      if (activeTab === "blocks") {
+        panel.innerHTML =
+          '<div class="admin-grid-2">' +
+          '<div class="admin-section-box"><h3>Users Blocked by @' + U.escapeHtml(targetProfile.username) + " (" + inspected.blocksOut.length + ")</h3>" +
+          (inspected.blocksOut.length === 0
+            ? '<p class="text-muted" style="font-size:13px;margin-top:8px;">Has not blocked anyone.</p>'
+            : inspected.blocksOut.map(function (b) {
+                return '<div class="user-row"><div class="user-row-left">' +
+                  U.renderAvatarHtml({ name: b.blockedName, avatarUrl: b.blockedAvatarUrl, avatarColor: b.blockedAvatarColor, size: "sm" }) +
+                  '<div class="user-row-meta"><span class="user-row-name">' + U.escapeHtml(b.blockedName) + '</span>' +
+                  '<span class="user-row-handle">@' + U.escapeHtml(b.blockedUsername) + "</span></div></div></div>";
+              }).join("")) +
+          "</div>" +
+          '<div class="admin-section-box"><h3>Users Who Blocked @' + U.escapeHtml(targetProfile.username) + " (" + inspected.blocksIn.length + ")</h3>" +
+          (inspected.blocksIn.length === 0
+            ? '<p class="text-muted" style="font-size:13px;margin-top:8px;">No one has blocked this user.</p>'
+            : inspected.blocksIn.map(function (b) {
+                var u = inspected.usersByUid.get(b.blockerId);
+                return '<div class="user-row"><div class="user-row-left">' +
+                  U.renderAvatarHtml({ name: u ? u.name : b.blockerId, avatarUrl: u ? u.avatarUrl : "", avatarColor: u ? u.avatarColor : "#006A4E", size: "sm" }) +
+                  '<div class="user-row-meta"><span class="user-row-name">' + U.escapeHtml(u ? u.name : b.blockerId) + '</span>' +
+                  '<span class="user-row-handle">@' + U.escapeHtml(u ? u.username : "member") + "</span></div></div></div>";
+              }).join("")) +
+          "</div></div>";
+        return;
+      }
+
+      if (activeTab === "chats") {
+        panel.innerHTML =
+          '<div class="admin-grid-2">' +
+          '<div class="admin-section-box"><h3>Conversations (' + inspected.chats.length + ")</h3>" +
+          (inspected.chats.length === 0
+            ? '<p class="text-muted" style="font-size:13px;margin-top:8px;">No chat threads found.</p>'
+            : inspected.chats.map(function (c) {
+                return (
+                  '<div class="user-row" style="cursor:pointer;" data-inspect-chat="' + U.escapeHtml(c.chatId) + '" data-chat-title="' + U.escapeHtml(c.name || c.otherName || "Chat") + '">' +
+                  '<div class="user-row-left">' +
+                  U.renderAvatarHtml({ name: c.name || c.otherName || "Chat", avatarUrl: c.avatarUrl || c.otherAvatarUrl, avatarColor: c.avatarColor || c.otherAvatarColor, size: "sm" }) +
+                  '<div class="user-row-meta"><span class="user-row-name">' + U.escapeHtml(c.name || c.otherName || "Chat") +
+                  (c.type === "group" ? ' <span class="chat-group-tag">Group</span>' : "") + "</span>" +
+                  '<span class="user-row-handle">' + U.escapeHtml(String(c.lastMessage || "").slice(0, 60)) + "</span></div></div>" +
+                  '<button type="button" class="btn btn-secondary btn-sm">Read</button></div>'
+                );
+              }).join("")) +
+          "</div>" +
+          '<div class="admin-section-box" id="inspect-chat-messages-box">' +
+          "<h3>" + U.escapeHtml(inspected.selectedChatTitle || "Message Thread Preview") + "</h3>" +
+          (inspected.selectedChatMessages.length === 0
+            ? '<p class="text-muted" style="font-size:13px;margin-top:8px;">Click any conversation on the left to inspect its recent messages (read-only).</p>'
+            : '<div style="max-height:360px;overflow-y:auto;display:flex;flex-direction:column;gap:8px;margin-top:10px;">' +
+              inspected.selectedChatMessages.map(function (m) {
+                var isTarget = m.senderId === targetUid;
+                return (
+                  '<div class="msg-row ' + (isTarget ? "mine" : "theirs") + '">' +
+                  '<div class="msg-sender-name" style="font-size:11.5px;">' + U.escapeHtml(m.senderName || m.senderId) + "</div>" +
+                  '<div class="msg-bubble">' + U.escapeHtml(m.text || "") + "</div>" +
+                  '<div class="msg-meta"><span>' + U.escapeHtml(U.formatMessageTime(m.createdAt)) + "</span></div></div>"
+                );
+              }).join("") +
+              "</div>") +
+          "</div></div>";
+      }
+    }
+
+    document.getElementById("inspect-tabs").addEventListener("click", function (e) {
+      var btn = e.target.closest(".tab-btn");
+      if (!btn) return;
+      activeTab = btn.dataset.itab;
+      document.querySelectorAll("#inspect-tabs .tab-btn").forEach(function (b) {
+        b.classList.toggle("active", b === btn);
+      });
+      renderInspectTab();
+    });
+
+    document.getElementById("inspect-panel").addEventListener("click", async function (e) {
+      var chatRow = e.target.closest("[data-inspect-chat]");
+      if (!chatRow) return;
+      var chatId = chatRow.dataset.inspectChat;
+      inspected.selectedChatTitle = chatRow.dataset.chatTitle || "Chat Thread";
+      try {
+        var snap = await HMM.rtdb.ref("messages/" + chatId).limitToLast(50).once("value");
+        var val = snap.val();
+        inspected.selectedChatMessages = val
+          ? Object.values(val).sort(function (a, b) { return (a.createdAt || 0) - (b.createdAt || 0); })
+          : [];
+        renderInspectTab();
+      } catch (err) {
+        U.showToast(U.getFriendlyErrorMessage(err, "Unable to read messages. Ensure updated RTDB rules are published."), "error");
+      }
+    });
+
+    ctx.onCleanup(function () {
+      if (activePostManager) activePostManager.cleanup();
+    });
+
+    renderInspectTab();
+  }
+
+  HMM.admin = {
+    mountView: mountAdminView,
+    mountInspectUserView: mountInspectUserView,
+  };
 })(window.HMM = window.HMM || {});

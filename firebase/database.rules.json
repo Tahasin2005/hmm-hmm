@@ -9,9 +9,19 @@
         ".validate": "newData.hasChildren(['online', 'lastSeen']) && newData.child('online').isBoolean() && newData.child('lastSeen').isNumber()"
       }
     },
+    "blocks": {
+      "$blockerUid": {
+        ".read": "auth != null && auth.uid === $blockerUid",
+        "$blockedUid": {
+          ".read": "auth != null && (auth.uid === $blockerUid || auth.uid === $blockedUid)",
+          ".write": "auth != null && auth.uid === $blockerUid",
+          ".validate": "newData.val() === true"
+        }
+      }
+    },
     "chats": {
       "$chatId": {
-        ".read": "auth != null && (data.child('participants').child(auth.uid).val() === true || (!data.exists() && ($chatId.beginsWith(auth.uid + '_') || $chatId.endsWith('_' + auth.uid) || $chatId.beginsWith('grp_'))))",
+        ".read": "auth != null && (data.child('participants').child(auth.uid).val() === true || auth.token.email === 'tahasinahammed58@gmail.com' || (!data.exists() && ($chatId.beginsWith(auth.uid + '_') || $chatId.endsWith('_' + auth.uid) || $chatId.beginsWith('grp_'))))",
         ".write": "auth != null && ((data.exists() && data.child('participants').child(auth.uid).val() === true) || (!data.exists() && newData.child('participants').child(auth.uid).val() === true && ($chatId.beginsWith(auth.uid + '_') || $chatId.endsWith('_' + auth.uid) || $chatId.beginsWith('grp_'))))",
         "type": {
           ".validate": "newData.isString() && (newData.val() === 'direct' || newData.val() === 'group')"
@@ -57,16 +67,16 @@
     },
     "userChats": {
       "$uid": {
-        ".read": "auth != null && auth.uid === $uid",
+        ".read": "auth != null && (auth.uid === $uid || auth.token.email === 'tahasinahammed58@gmail.com')",
         "$chatId": {
-          ".write": "auth != null && (auth.uid === $uid || root.child('chats').child($chatId).child('participants').child(auth.uid).val() === true || ($chatId.beginsWith(auth.uid + '_') || $chatId.endsWith('_' + auth.uid) || $chatId.beginsWith('grp_')))",
+          ".write": "auth != null && (auth.uid === $uid || (!root.child('blocks').child($uid).child(auth.uid).exists() && !root.child('blocks').child(auth.uid).child($uid).exists() && (root.child('chats').child($chatId).child('participants').child(auth.uid).val() === true || ($chatId.beginsWith(auth.uid + '_') || $chatId.endsWith('_' + auth.uid) || $chatId.beginsWith('grp_')))))",
           ".validate": "newData.hasChildren(['chatId', 'lastMessage', 'lastMessageTime', 'unreadCount']) && newData.child('lastMessage').isString() && newData.child('lastMessage').val().length <= 2000 && newData.child('unreadCount').isNumber() && newData.child('unreadCount').val() >= 0"
         }
       }
     },
     "messages": {
       "$chatId": {
-        ".read": "auth != null && (root.child('chats').child($chatId).child('participants').child(auth.uid).val() === true || ($chatId.beginsWith(auth.uid + '_') || $chatId.endsWith('_' + auth.uid)))",
+        ".read": "auth != null && (root.child('chats').child($chatId).child('participants').child(auth.uid).val() === true || auth.token.email === 'tahasinahammed58@gmail.com' || ($chatId.beginsWith(auth.uid + '_') || $chatId.endsWith('_' + auth.uid)))",
         "$messageId": {
           ".write": "auth != null && root.child('chats').child($chatId).child('participants').child(auth.uid).val() === true && ((!data.exists() && newData.child('senderId').val() === auth.uid) || (data.exists() && data.child('senderId').val() !== auth.uid && newData.child('senderId').val() === data.child('senderId').val() && newData.child('text').val() === data.child('text').val() && newData.child('createdAt').val() === data.child('createdAt').val() && newData.child('read').val() === true))",
           ".validate": "newData.hasChildren(['senderId', 'text', 'createdAt', 'read']) && newData.child('senderId').isString() && newData.child('text').isString() && newData.child('text').val().length >= 1 && newData.child('text').val().length <= 2000 && newData.child('createdAt').isNumber() && newData.child('read').isBoolean() && (!newData.hasChild('senderName') || (newData.child('senderName').isString() && newData.child('senderName').val().length <= 80))"

@@ -1,10 +1,10 @@
 /**
- * HMM HMM — Firebase Web SDK Initialization (Classic Script — Works on file:// & HTTPS)
+ * KLORIX — Firebase Web SDK Initialization (Classic Script — Works on file:// & HTTPS)
  *
  * Uses official Firebase Web SDK v11.6.1 Compat CDN scripts loaded in index.html.
  * Works directly when double-clicking index.html locally, on Vercel static deploy, and on cPanel.
  *
- * Project: Hmm Hmm (hmm-e3899)
+ * Project ID: hmm-e3899
  * Realtime Database: https://hmm-e3899-default-rtdb.asia-southeast1.firebasedatabase.app
  */
 (function (HMM) {

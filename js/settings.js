@@ -1,6 +1,6 @@
 /**
- * HMM HMM — Account, Privacy, Dark Mode & Security Settings View Controller (#settings)
- * Classic script (works directly via file:// and HTTP/HTTPS).
+ * KLORIX (window.HMM) — Account, Privacy, Blocked Users, Dark Mode & Security Settings (#settings)
+ * Classic script (works directly via file://, Vercel, and cPanel).
  */
 (function (HMM) {
   "use strict";
@@ -8,6 +8,7 @@
   var U = HMM.utils;
 
   function mountSettingsView(ctx) {
+    var cfg = HMM.siteConfig.get();
     var selectedColor = ctx.profile.avatarColor || U.AVATAR_COLORS[0];
     var usesPassword = ctx.user.providerData.some(function (p) { return p.providerId === "password"; });
     var currentTheme = U.getCurrentTheme();
@@ -21,7 +22,7 @@
 
     ctx.mainEl.innerHTML =
       '<div class="page-header"><div><h1 class="page-title">Settings</h1>' +
-      '<p class="page-subtitle">Manage your HMM HMM profile, privacy, appearance, and account security.</p></div></div>' +
+      '<p class="page-subtitle">Manage your ' + U.escapeHtml(cfg.siteName) + ' profile, privacy, blocked users, appearance, and account security.</p></div></div>' +
       '<div class="settings-stack">' +
       '<section class="card"><h2 class="card-title" style="margin-bottom:14px;">Profile &amp; Privacy</h2>' +
       '<form id="settings-profile-form" class="auth-form">' +
@@ -39,7 +40,7 @@
       '<div class="form-group"><label class="form-label">Avatar color</label><div class="color-swatches" id="set-swatches">' + swatchesHtml + "</div></div>" +
       '<div class="form-group"><label class="form-label" for="set-visibility">Profile visibility</label>' +
       '<select id="set-visibility" class="form-select">' +
-      '<option value="public" ' + (ctx.profile.visibility === "public" ? "selected" : "") + ">Public — Anyone on HMM HMM can find and view your profile</option>" +
+      '<option value="public" ' + (ctx.profile.visibility === "public" ? "selected" : "") + ">Public — Anyone on " + U.escapeHtml(cfg.siteName) + " can find and view your profile</option>" +
       '<option value="friends" ' + (ctx.profile.visibility === "friends" ? "selected" : "") + ">Friends only — Hidden from public search</option></select></div>" +
       '<div class="form-group"><label class="form-label" for="set-fr-pref">Who can send you friend requests</label>' +
       '<select id="set-fr-pref" class="form-select">' +
@@ -47,6 +48,11 @@
       '<option value="none" ' + (ctx.profile.friendRequestPref === "none" ? "selected" : "") + ">Nobody</option></select></div>" +
       '<div><button type="submit" id="set-profile-save" class="btn btn-primary">Save profile settings</button></div>' +
       "</form></section>" +
+
+      '<section class="card"><h2 class="card-title" style="margin-bottom:6px;display:flex;align-items:center;gap:8px;">' + U.ICONS.ban + " Blocked Users</h2>" +
+      '<p class="text-muted" style="font-size:13.5px;margin-bottom:14px;">Blocked users cannot message you, send friend requests, or see your posts and profile.</p>' +
+      '<div id="settings-blocked-list"></div></section>' +
+
       '<section class="card"><h2 class="card-title" style="margin-bottom:6px;">Appearance</h2>' +
       '<p class="text-muted" style="font-size:13.5px;margin-bottom:14px;">Switch between Light and Dark mode at any time.</p>' +
       '<div class="theme-options" id="theme-options">' +
@@ -65,7 +71,7 @@
           '<p class="text-muted" style="font-size:13.5px;">You sign in with Google (' + U.escapeHtml(ctx.user.email || "") + ").</p></section>") +
       '<section class="card" style="border-color:rgba(217, 56, 58, 0.35);">' +
       '<h2 class="card-title text-danger" style="margin-bottom:6px;">Account Actions</h2>' +
-      '<p class="text-muted" style="font-size:13.5px;margin-bottom:14px;">Sign out on this device, or permanently delete your HMM HMM profile and login.</p>' +
+      '<p class="text-muted" style="font-size:13.5px;margin-bottom:14px;">Sign out on this device, or permanently delete your ' + U.escapeHtml(cfg.siteName) + " profile and login.</p>" +
       '<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:16px;">' +
       '<button type="button" id="set-logout-btn" class="btn btn-secondary">' + U.ICONS.logout + " Sign out</button></div>" +
       '<form id="delete-account-form" class="auth-form" style="padding-top:14px;border-top:1px solid var(--border);">' +
@@ -75,6 +81,46 @@
         : "") +
       '<div><button type="submit" id="del-account-btn" class="btn btn-danger-soft">' + U.ICONS.trash + " Permanently delete account</button></div>" +
       "</form></section></div>";
+
+    var blockedListEl = document.getElementById("settings-blocked-list");
+
+    function renderBlockedUsers() {
+      if (!blockedListEl) return;
+      var list = HMM.blocks ? HMM.blocks.getBlockedList() : [];
+      if (list.length === 0) {
+        blockedListEl.innerHTML = '<p class="text-muted" style="font-size:13.5px;">You have not blocked any users.</p>';
+        return;
+      }
+      blockedListEl.innerHTML = list
+        .map(function (b) {
+          return (
+            '<div class="user-row">' +
+            '<div class="user-row-left">' +
+            U.renderAvatarHtml({ name: b.blockedName, avatarUrl: b.blockedAvatarUrl, avatarColor: b.blockedAvatarColor, size: "sm" }) +
+            '<div class="user-row-meta"><span class="user-row-name">' + U.escapeHtml(b.blockedName) + "</span>" +
+            '<span class="user-row-handle">@' + U.escapeHtml(b.blockedUsername) + "</span></div></div>" +
+            '<button type="button" class="btn btn-secondary btn-sm" data-unblock-uid="' + U.escapeHtml(b.blockedId) + '">Unblock</button></div>'
+          );
+        })
+        .join("");
+    }
+
+    blockedListEl.addEventListener("click", async function (e) {
+      var btn = e.target.closest("[data-unblock-uid]");
+      if (!btn) return;
+      btn.disabled = true;
+      try {
+        await HMM.blocks.unblockUser(ctx.user.uid, btn.dataset.unblockUid);
+        U.showToast("User unblocked.", "success");
+      } catch (err) {
+        U.showToast(U.getFriendlyErrorMessage(err), "error");
+        btn.disabled = false;
+      }
+    });
+
+    renderBlockedUsers();
+    var unsubBlocks = HMM.blocks.subscribe(renderBlockedUsers);
+    ctx.onCleanup(unsubBlocks);
 
     var uInput = document.getElementById("set-username");
     uInput.addEventListener("input", function () {

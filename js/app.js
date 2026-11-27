@@ -1,6 +1,6 @@
 /**
- * HMM HMM — Main Application Bootstrap, Hash Router, Shell, Mobile Navigation Drawer,
- * Dynamic Site Config Sync, Presence, Badges & Report Modal
+ * KLORIX — Main Application Bootstrap, Hash Router, Shell, Mobile Navigation Drawer,
+ * Dynamic Site Config Sync, User Blocks, Presence, Badges & Report Modal
  * Classic script — works automatically on Vercel static deploy, cPanel (HTTPS),
  * AND when double-clicking index.html locally (file://).
  */
@@ -248,7 +248,7 @@
   function renderOnboardingGate(root, user) {
     var cfg = HMM.siteConfig.get();
     var pending = A.readPendingSignup();
-    var suggestedName = (pending && pending.name) || user.displayName || "HMM Member";
+    var suggestedName = (pending && pending.name) || user.displayName || "KLORIX Member";
     var suggestedUser = (pending && pending.username) || A.generateDefaultUsername(suggestedName, user.uid);
     var suggestedLocation = (pending && pending.location) || "Dhaka, Bangladesh";
 
@@ -395,7 +395,7 @@
       "</div>" +
       '<form id="global-search-form" class="header-search" role="search">' +
       '<span class="header-search-icon">' + U.ICONS.search + "</span>" +
-      '<input id="global-search-input" type="search" placeholder="Search people, @usernames..." aria-label="Search people" /></form>' +
+      '<input id="global-search-input" type="search" placeholder="Search people, @usernames, #hashtags..." aria-label="Search people and hashtags" /></form>' +
       '<div class="header-actions">' +
       '<button type="button" id="theme-toggle-btn" class="icon-btn" title="Toggle dark mode" aria-label="Toggle dark mode">' + (isDark ? U.ICONS.sun : U.ICONS.moon) + "</button>" +
       '<a href="#messages" class="icon-btn" data-hdr-nav="messages" title="Messages" aria-label="Messages">' + U.ICONS.message + '<span id="hdr-badge-messages" class="badge-dot hidden">0</span></a>' +
@@ -418,7 +418,7 @@
       "</div>" +
       '<form id="drawer-search-form" class="mobile-drawer-search" role="search">' +
       '<span class="header-search-icon">' + U.ICONS.search + "</span>" +
-      '<input id="drawer-search-input" type="search" placeholder="Search people, @usernames..." aria-label="Search" /></form>' +
+      '<input id="drawer-search-input" type="search" placeholder="Search people, @usernames, #hashtags..." aria-label="Search" /></form>' +
       '<a href="#profile" class="sidebar-profile-mini" id="drawer-profile-card">' +
       U.renderAvatarHtml({ name: profile.name, avatarUrl: profile.avatarUrl, avatarColor: profile.avatarColor, size: "md", online: true, isAdmin: isOfficialAdmin }) +
       '<div class="sidebar-profile-info"><strong class="name-with-badge"><span id="drawer-profile-name">' + U.escapeHtml(profile.name) + "</span>" + adminBadge + "</strong>" +
@@ -578,7 +578,7 @@
 
     runViewCleanup();
 
-    var wideRoutes = { messages: true, admin: true };
+    var wideRoutes = { messages: true, admin: true, inspect: true };
     var shell = document.getElementById("hmm-app-shell");
     var rail = document.getElementById("page-right-rail");
     if (shell) shell.classList.toggle("wide-layout", Boolean(wideRoutes[route]));
@@ -586,13 +586,14 @@
 
     // Update active nav highlights (desktop sidebar + mobile drawer + header + bottom nav)
     document.querySelectorAll("[data-nav]").forEach(function (el) {
-      el.classList.toggle("active", el.dataset.nav === route);
+      var isMatch = el.dataset.nav === route || (route === "inspect" && el.dataset.nav === "admin");
+      el.classList.toggle("active", isMatch);
     });
     document.querySelectorAll("[data-hdr-nav]").forEach(function (el) {
       el.classList.toggle("active", el.dataset.hdrNav === route);
     });
     document.querySelectorAll("[data-mob-nav]").forEach(function (el) {
-      var active = el.dataset.mobNav === route || (el.dataset.mobNav === "profile" && (route === "settings" || route === "admin"));
+      var active = el.dataset.mobNav === route || (el.dataset.mobNav === "profile" && (route === "settings" || route === "admin" || route === "inspect"));
       el.classList.toggle("active", active);
     });
 
@@ -650,6 +651,13 @@
       case "admin":
         HMM.admin.mountView(ctx);
         break;
+      case "inspect":
+        if (HMM.admin && HMM.admin.mountInspectUserView) {
+          HMM.admin.mountInspectUserView(ctx, params);
+        } else {
+          HMM.feed.mountView(ctx, params);
+        }
+        break;
       case "feed":
       default:
         HMM.feed.mountView(ctx, params);
@@ -676,7 +684,7 @@
         if (cfg.primaryAdminUid !== user.uid) {
           await HMM.db.collection("siteConfig").doc("general").set(
             {
-              siteName: cfg.siteName || "HMM HMM",
+              siteName: cfg.siteName || "KLORIX",
               tagline: cfg.tagline || "Connect. Share. Belong.",
               logoUrl: cfg.logoUrl || "assets/icons/logo.svg",
               faviconUrl: cfg.faviconUrl || "assets/icons/favicon.svg",
@@ -712,7 +720,7 @@
             if (avail) {
               profile = await A.createUserProfile({
                 firebaseUser: user,
-                name: pending.name || user.displayName || "HMM Member",
+                name: pending.name || user.displayName || "KLORIX Member",
                 username: pending.username,
                 location: pending.location || "Dhaka, Bangladesh",
               });
@@ -740,15 +748,31 @@
 
       currentSession = { user: user, profile: profile, isAdmin: isAdmin };
 
+      // Initialize two-way user block listeners before rendering shell/views
+      if (HMM.blocks && HMM.blocks.init) {
+        HMM.blocks.init(user.uid);
+        globalCleanups.push(function () {
+          HMM.blocks.cleanup();
+        });
+      }
+
       renderShell(root, currentSession);
+      if (HMM.blocks && HMM.blocks.subscribe) {
+        globalCleanups.push(
+          HMM.blocks.subscribe(function () {
+            if (currentSession) renderRightRailSuggestions(currentSession);
+          })
+        );
+      }
       globalCleanups.push(attachPresence(user.uid));
       globalCleanups.push(subscribeToGlobalBadges(user.uid));
 
       renderActiveRoute();
     } catch (err) {
       console.error("Bootstrap error:", err);
+      var errSiteName = (HMM.siteConfig && HMM.siteConfig.get().siteName) || "KLORIX";
       root.innerHTML =
-        '<div class="gate-page"><div class="gate-card"><h2>Unable to load HMM HMM</h2>' +
+        '<div class="gate-page"><div class="gate-card"><h2>Unable to load ' + U.escapeHtml(errSiteName) + "</h2>" +
         '<p class="text-muted" style="margin-top:8px;font-size:14px;">' + U.escapeHtml(U.getFriendlyErrorMessage(err)) + "</p>" +
         '<div class="gate-actions">' +
         '<button type="button" class="btn btn-primary btn-block" onclick="window.location.reload()">Retry</button>' +

@@ -62,6 +62,11 @@ service cloud.firestore {
       return a < b ? a + '_' + b : b + '_' + a;
     }
 
+    function isNotBlockedEither(a, b) {
+      return !exists(/databases/$(database)/documents/blocks/$(a + '_' + b))
+        && !exists(/databases/$(database)/documents/blocks/$(b + '_' + a));
+    }
+
     // =========================================================================
     // ENTITY VALIDATION BLUEPRINTS
     // =========================================================================
@@ -122,6 +127,8 @@ service cloud.firestore {
         && data.keys().hasOnly([
           'postId', 'authorId', 'authorName', 'authorUsername',
           'authorAvatarUrl', 'authorAvatarColor', 'authorRole', 'text', 'visibility',
+          'postType', 'embedProvider', 'embedUrl', 'embedAspect',
+          'taggedUsers', 'hashtags', 'mentions',
           'likesCount', 'commentsCount', 'sharesCount', 'createdAt', 'updatedAt'
         ])
         && isValidId(data.postId) && data.postId == postId
@@ -131,7 +138,18 @@ service cloud.firestore {
         && data.authorAvatarUrl is string && data.authorAvatarUrl.size() <= 500
         && data.authorAvatarColor is string && data.authorAvatarColor.size() >= 1 && data.authorAvatarColor.size() <= 32
         && (!('authorRole' in data) || data.authorRole == 'member' || (data.authorRole == 'admin' && isAdmin()))
-        && data.text is string && data.text.size() >= 1 && data.text.size() <= 2000
+        && data.text is string && data.text.size() <= 2000
+        && (
+          data.text.size() >= 1 ||
+          ('postType' in data && data.postType == 'embed' && 'embedUrl' in data && data.embedUrl is string && data.embedUrl.size() >= 10)
+        )
+        && (!('postType' in data) || data.postType in ['text', 'embed'])
+        && (!('embedProvider' in data) || data.embedProvider in ['', 'youtube', 'facebook', 'vimeo'])
+        && (!('embedUrl' in data) || (data.embedUrl is string && data.embedUrl.size() <= 1000))
+        && (!('embedAspect' in data) || data.embedAspect in ['16:9', '9:16', '4:3', '1:1'])
+        && (!('taggedUsers' in data) || (data.taggedUsers is list && data.taggedUsers.size() <= 20))
+        && (!('hashtags' in data) || (data.hashtags is list && data.hashtags.size() <= 30))
+        && (!('mentions' in data) || (data.mentions is list && data.mentions.size() <= 30))
         && data.visibility == 'public'
         && data.likesCount is int && data.likesCount >= 0
         && data.commentsCount is int && data.commentsCount >= 0
@@ -147,7 +165,8 @@ service cloud.firestore {
         ])
         && data.keys().hasOnly([
           'commentId', 'postId', 'authorId', 'authorName', 'authorUsername',
-          'authorAvatarUrl', 'authorAvatarColor', 'authorRole', 'text', 'visibility', 'createdAt'
+          'authorAvatarUrl', 'authorAvatarColor', 'authorRole', 'text',
+          'mentions', 'visibility', 'createdAt'
         ])
         && isValidId(data.commentId) && data.commentId == commentId
         && isValidId(data.postId)
@@ -157,6 +176,7 @@ service cloud.firestore {
         && data.authorAvatarUrl is string && data.authorAvatarUrl.size() <= 500
         && data.authorAvatarColor is string && data.authorAvatarColor.size() >= 1 && data.authorAvatarColor.size() <= 32
         && (!('authorRole' in data) || data.authorRole == 'member' || (data.authorRole == 'admin' && isAdmin()))
+        && (!('mentions' in data) || (data.mentions is list && data.mentions.size() <= 20))
         && data.text is string && data.text.size() >= 1 && data.text.size() <= 1000
         && data.visibility == 'public'
         && data.createdAt is timestamp;
@@ -203,6 +223,78 @@ service cloud.firestore {
         && (!('userRole' in data) || data.userRole in ['member', 'admin'])
         && data.createdAt is timestamp
         && (!('updatedAt' in data) || data.updatedAt is timestamp);
+    }
+
+    function isValidBlock(data, blockId) {
+      return data.keys().hasAll(['blockId', 'blockerId', 'blockedId', 'createdAt'])
+        && data.keys().hasOnly([
+          'blockId', 'blockerId', 'blockedId',
+          'blockedName', 'blockedUsername', 'blockedAvatarUrl', 'blockedAvatarColor',
+          'createdAt'
+        ])
+        && isValidId(data.blockId) && data.blockId == blockId
+        && isValidId(data.blockerId)
+        && isValidId(data.blockedId)
+        && data.blockerId != data.blockedId
+        && data.blockId == data.blockerId + '_' + data.blockedId
+        && (!('blockedName' in data) || (data.blockedName is string && data.blockedName.size() <= 80))
+        && (!('blockedUsername' in data) || (data.blockedUsername is string && data.blockedUsername.size() <= 30))
+        && (!('blockedAvatarUrl' in data) || (data.blockedAvatarUrl is string && data.blockedAvatarUrl.size() <= 500))
+        && (!('blockedAvatarColor' in data) || (data.blockedAvatarColor is string && data.blockedAvatarColor.size() <= 32))
+        && data.createdAt is timestamp;
+    }
+
+    function isValidAnnouncement(data, announcementId) {
+      return data.keys().hasAll([
+          'announcementId', 'title', 'message', 'authorId', 'authorName',
+          'authorUsername', 'isActive', 'createdAt', 'updatedAt'
+        ])
+        && data.keys().hasOnly([
+          'announcementId', 'title', 'message', 'imageUrl', 'linkUrl',
+          'authorId', 'authorName', 'authorUsername', 'authorAvatarUrl',
+          'authorAvatarColor', 'isActive', 'createdAt', 'updatedAt'
+        ])
+        && isValidId(data.announcementId) && data.announcementId == announcementId
+        && data.title is string && data.title.size() <= 140
+        && data.message is string && data.message.size() <= 2000
+        && (data.title.size() >= 1 || data.message.size() >= 1)
+        && (!('imageUrl' in data) || (data.imageUrl is string && data.imageUrl.size() <= 350000))
+        && (!('linkUrl' in data) || (data.linkUrl is string && data.linkUrl.size() <= 500))
+        && isValidId(data.authorId)
+        && data.authorName is string && data.authorName.size() >= 1 && data.authorName.size() <= 80
+        && isValidUsername(data.authorUsername)
+        && (!('authorAvatarUrl' in data) || (data.authorAvatarUrl is string && data.authorAvatarUrl.size() <= 500))
+        && (!('authorAvatarColor' in data) || (data.authorAvatarColor is string && data.authorAvatarColor.size() <= 32))
+        && data.isActive is bool
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidFeedPromo(data, promoId) {
+      return data.keys().hasAll([
+          'promoId', 'promoType', 'intervalPosts', 'isActive', 'createdAt', 'updatedAt'
+        ])
+        && data.keys().hasOnly([
+          'promoId', 'promoType', 'label', 'title', 'caption',
+          'embedProvider', 'embedUrl', 'embedAspect',
+          'imageUrl', 'ctaText', 'ctaUrl',
+          'intervalPosts', 'isActive', 'createdAt', 'updatedAt'
+        ])
+        && isValidId(data.promoId) && data.promoId == promoId
+        && data.promoType in ['video', 'ad']
+        && (!('label' in data) || (data.label is string && data.label.size() <= 40))
+        && (!('title' in data) || (data.title is string && data.title.size() <= 140))
+        && (!('caption' in data) || (data.caption is string && data.caption.size() <= 1000))
+        && (!('embedProvider' in data) || data.embedProvider in ['', 'youtube', 'facebook', 'vimeo'])
+        && (!('embedUrl' in data) || (data.embedUrl is string && data.embedUrl.size() <= 1000))
+        && (!('embedAspect' in data) || data.embedAspect in ['16:9', '9:16', '4:3', '1:1'])
+        && (!('imageUrl' in data) || (data.imageUrl is string && data.imageUrl.size() <= 350000))
+        && (!('ctaText' in data) || (data.ctaText is string && data.ctaText.size() <= 60))
+        && (!('ctaUrl' in data) || (data.ctaUrl is string && data.ctaUrl.size() <= 500))
+        && data.intervalPosts is int && data.intervalPosts >= 1 && data.intervalPosts <= 50
+        && data.isActive is bool
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
     }
 
     function isValidFriendRequest(data, requestId) {
@@ -259,14 +351,7 @@ service cloud.firestore {
         && data.senderId != data.recipientId
         && data.senderName is string && data.senderName.size() >= 1 && data.senderName.size() <= 80
         && isValidUsername(data.senderUsername)
-        && (
-          data.type == 'friend_request' ||
-          data.type == 'friend_accepted' ||
-          data.type == 'like' ||
-          data.type == 'comment' ||
-          data.type == 'message' ||
-          data.type == 'follow'
-        )
+        && data.type in ['friend_request', 'friend_accepted', 'like', 'comment', 'message', 'follow', 'mention', 'tag']
         && data.referenceId is string && data.referenceId.size() <= 128
         && data.message is string && data.message.size() >= 1 && data.message.size() <= 240
         && data.isRead is bool
@@ -373,6 +458,52 @@ service cloud.firestore {
     }
 
     // =========================================================================
+    // ANNOUNCEMENTS (Global Home Feed Announcements — Admin Write, Signed-In Read)
+    // =========================================================================
+    match /announcements/{announcementId} {
+      allow get, list: if isSignedIn();
+      allow create: if isAdmin() && isValidId(announcementId) && isValidAnnouncement(incoming(), announcementId);
+      allow update: if isAdmin() && isValidId(announcementId) && isValidAnnouncement(incoming(), announcementId);
+      allow delete: if isAdmin() && isValidId(announcementId);
+    }
+
+    // =========================================================================
+    // FEED PROMOS (Admin Anonymous In-Feed Videos & Ads — Signed-In Read)
+    // =========================================================================
+    match /feedPromos/{promoId} {
+      allow get, list: if isSignedIn();
+      allow create: if isAdmin() && isValidId(promoId) && isValidFeedPromo(incoming(), promoId);
+      allow update: if isAdmin() && isValidId(promoId) && isValidFeedPromo(incoming(), promoId);
+      allow delete: if isAdmin() && isValidId(promoId);
+    }
+
+    // =========================================================================
+    // BLOCKS (User-to-User Two-Way Blocking)
+    // =========================================================================
+    match /blocks/{blockId} {
+      allow get: if isSignedIn() && isValidId(blockId) && (
+        existing().blockerId == request.auth.uid ||
+        existing().blockedId == request.auth.uid ||
+        isAdmin()
+      );
+      allow list: if isSignedIn() && (
+        resource.data.blockerId == request.auth.uid ||
+        resource.data.blockedId == request.auth.uid ||
+        isBootstrappedAdmin()
+      );
+      allow create: if isVerifiedUser()
+        && isValidId(blockId)
+        && isValidBlock(incoming(), blockId)
+        && incoming().blockerId == request.auth.uid
+        && incoming().createdAt == request.time;
+      allow update: if false;
+      allow delete: if isVerifiedUser() && isValidId(blockId) && (
+        existing().blockerId == request.auth.uid ||
+        isAdmin()
+      );
+    }
+
+    // =========================================================================
     // USERS (Public Profile — PII Isolated)
     // =========================================================================
     match /users/{uid} {
@@ -408,7 +539,6 @@ service cloud.firestore {
         && incoming().uid == existing().uid
         && incoming().createdAt == existing().createdAt
         && (
-          // Action 1: Owner edits profile settings
           (
             isOwner(uid)
             && existing().isSuspended == false
@@ -420,7 +550,6 @@ service cloud.firestore {
             && incoming().updatedAt == request.time
             && getAfter(/databases/$(database)/documents/usernames/$(incoming().username)).data.uid == uid
           ) ||
-          // Action 2: Owner increments/decrements own postsCount
           (
             isOwner(uid)
             && incoming().diff(existing()).affectedKeys().hasOnly(['postsCount'])
@@ -429,7 +558,6 @@ service cloud.firestore {
               (existing().postsCount > 0 && incoming().postsCount == existing().postsCount - 1)
             )
           ) ||
-          // Action 3: Owner increments/decrements own followingCount
           (
             isOwner(uid)
             && incoming().diff(existing()).affectedKeys().hasOnly(['followingCount'])
@@ -438,7 +566,6 @@ service cloud.firestore {
               (existing().followingCount > 0 && incoming().followingCount == existing().followingCount - 1)
             )
           ) ||
-          // Action 4: Atomic followersCount sync
           (
             !isOwner(uid)
             && incoming().diff(existing()).affectedKeys().hasOnly(['followersCount'])
@@ -453,7 +580,6 @@ service cloud.firestore {
               )
             )
           ) ||
-          // Action 5: Atomic friendsCount sync
           (
             incoming().diff(existing()).affectedKeys().hasOnly(['friendsCount'])
             && (
@@ -473,7 +599,6 @@ service cloud.firestore {
               )
             )
           ) ||
-          // Action 6: Admin moderation (suspend/unsuspend, role sync, postsCount adjustment on trash/restore)
           (
             isAdmin()
             && incoming().diff(existing()).affectedKeys().hasOnly(['isSuspended', 'role', 'postsCount', 'updatedAt'])
@@ -547,7 +672,6 @@ service cloud.firestore {
             && incoming().updatedAt == request.time
             && exists(/databases/$(database)/documents/users/$(request.auth.uid))
           ) ||
-          // Admin restoring a trashed post
           isAdmin()
         );
 
@@ -560,7 +684,7 @@ service cloud.firestore {
         && (
           (
             existing().authorId == request.auth.uid
-            && incoming().diff(existing()).affectedKeys().hasOnly(['text', 'updatedAt'])
+            && incoming().diff(existing()).affectedKeys().hasOnly(['text', 'hashtags', 'mentions', 'updatedAt'])
             && incoming().updatedAt == request.time
           ) ||
           (
@@ -618,7 +742,6 @@ service cloud.firestore {
             && incoming().createdAt == request.time
             && exists(/databases/$(database)/documents/posts/$(incoming().postId))
           ) ||
-          // Admin restoring a trashed comment
           isAdmin()
         );
 
@@ -628,7 +751,7 @@ service cloud.firestore {
     }
 
     // =========================================================================
-    // LIKES / POST REACTIONS (Deterministic postId_userId — Public Non-PII)
+    // LIKES / POST REACTIONS
     // =========================================================================
     match /likes/{likeId} {
       allow get: if isSignedIn() && isValidId(likeId);
@@ -654,7 +777,7 @@ service cloud.firestore {
     }
 
     // =========================================================================
-    // COMMENT REACTIONS (Deterministic commentId_userId — Public Non-PII)
+    // COMMENT REACTIONS
     // =========================================================================
     match /commentReactions/{reactionId} {
       allow get: if isSignedIn() && isValidId(reactionId);
@@ -681,7 +804,7 @@ service cloud.firestore {
     }
 
     // =========================================================================
-    // FRIEND REQUESTS
+    // FRIEND REQUESTS (Block-Protected)
     // =========================================================================
     match /friendRequests/{requestId} {
       allow get: if isSignedIn() && isValidId(requestId) && (
@@ -703,6 +826,7 @@ service cloud.firestore {
         && incoming().status == 'pending'
         && incoming().createdAt == request.time
         && incoming().updatedAt == request.time
+        && isNotBlockedEither(request.auth.uid, incoming().receiverId)
         && exists(/databases/$(database)/documents/users/$(incoming().receiverId));
 
       allow update: if isVerifiedUser()
@@ -756,6 +880,7 @@ service cloud.firestore {
         && isValidFriendship(incoming(), friendshipId)
         && (incoming().user1Id == request.auth.uid || incoming().user2Id == request.auth.uid)
         && incoming().createdAt == request.time
+        && isNotBlockedEither(incoming().user1Id, incoming().user2Id)
         && exists(/databases/$(database)/documents/users/$(incoming().user1Id))
         && exists(/databases/$(database)/documents/users/$(incoming().user2Id));
 
@@ -769,7 +894,7 @@ service cloud.firestore {
     }
 
     // =========================================================================
-    // FOLLOWS
+    // FOLLOWS (Block-Protected)
     // =========================================================================
     match /follows/{followId} {
       allow get: if isSignedIn() && isValidId(followId) && (
@@ -789,15 +914,20 @@ service cloud.firestore {
         && isValidFollow(incoming(), followId)
         && incoming().followerId == request.auth.uid
         && incoming().createdAt == request.time
+        && isNotBlockedEither(request.auth.uid, incoming().followingId)
         && exists(/databases/$(database)/documents/users/$(incoming().followingId));
 
       allow update: if false;
 
-      allow delete: if isVerifiedUser() && isValidId(followId) && existing().followerId == request.auth.uid;
+      allow delete: if isVerifiedUser() && isValidId(followId) && (
+        existing().followerId == request.auth.uid ||
+        existing().followingId == request.auth.uid ||
+        isAdmin()
+      );
     }
 
     // =========================================================================
-    // NOTIFICATIONS
+    // NOTIFICATIONS (Block-Protected)
     // =========================================================================
     match /notifications/{notificationId} {
       allow get: if isSignedIn() && isValidId(notificationId) && (
@@ -816,6 +946,7 @@ service cloud.firestore {
         && incoming().senderId == request.auth.uid
         && incoming().isRead == false
         && incoming().createdAt == request.time
+        && isNotBlockedEither(request.auth.uid, incoming().recipientId)
         && exists(/databases/$(database)/documents/users/$(incoming().recipientId));
 
       allow update: if isVerifiedUser()

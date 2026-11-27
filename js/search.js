@@ -1,6 +1,6 @@
 /**
- * HMM HMM — Explore People, User Search & Trending Posts View Controller (#explore)
- * Classic script (works directly via file:// and HTTP/HTTPS).
+ * KLORIX (window.HMM) — Explore People, #Hashtags, User Search & Trending Posts (#explore)
+ * Classic script (works directly via file://, Vercel, and cPanel).
  */
 (function (HMM) {
   "use strict";
@@ -8,8 +8,10 @@
   var U = HMM.utils;
 
   async function mountExploreView(ctx, params) {
+    var cfg = HMM.siteConfig.get();
     var initialQ = params.get("q") || "";
-    var activeTab = "people";
+    var startsWithHash = initialQ.trim().indexOf("#") === 0;
+    var activeTab = startsWithHash ? "posts" : "people";
     var currentQuery = initialQ.trim();
     var displayedUsers = [];
     var allPosts = [];
@@ -20,17 +22,17 @@
     };
 
     ctx.mainEl.innerHTML =
-      '<div class="page-header"><div><h1 class="page-title">Explore HMM HMM</h1>' +
-      '<p class="page-subtitle">Discover people across Bangladesh and trending community posts.</p></div></div>' +
+      '<div class="page-header"><div><h1 class="page-title">Explore ' + U.escapeHtml(cfg.siteName) + "</h1>" +
+      '<p class="page-subtitle">Discover people, #hashtags, embedded videos, and trending community posts.</p></div></div>' +
       '<div class="card">' +
       '<div style="display:flex;gap:8px;margin-bottom:14px;">' +
-      '<input id="explore-search-input" class="form-input" type="search" placeholder="Search by name, @username, or city..." value="' + U.escapeHtml(initialQ) + '" />' +
+      '<input id="explore-search-input" class="form-input" type="search" placeholder="Search by name, @username, #hashtag, or city..." value="' + U.escapeHtml(initialQ) + '" />' +
       '<button type="button" id="explore-search-btn" class="btn btn-primary">Search</button></div>' +
       '<div class="tabs" id="explore-tabs">' +
-      '<button type="button" class="tab-btn active" data-tab="people">People</button>' +
-      '<button type="button" class="tab-btn" data-tab="posts">Posts</button></div></div>' +
-      '<div id="explore-people-view" class="people-grid"></div>' +
-      '<div id="explore-posts-view" class="hidden" style="display:flex;flex-direction:column;gap:14px;"></div>';
+      '<button type="button" class="tab-btn ' + (activeTab === "people" ? "active" : "") + '" data-tab="people">People</button>' +
+      '<button type="button" class="tab-btn ' + (activeTab === "posts" ? "active" : "") + '" data-tab="posts">Posts &amp; #Hashtags</button></div></div>' +
+      '<div id="explore-people-view" class="people-grid ' + (activeTab === "people" ? "" : "hidden") + '"></div>' +
+      '<div id="explore-posts-view" class="' + (activeTab === "posts" ? "" : "hidden") + '" style="display:flex;flex-direction:column;gap:14px;"></div>';
 
     var globalInput = document.getElementById("global-search-input");
     if (globalInput && initialQ) globalInput.value = initialQ;
@@ -40,7 +42,10 @@
     var postManager = HMM.feed.createPostListManager({ container: postsContainer, ctx: ctx });
 
     function renderPeople() {
-      if (displayedUsers.length === 0) {
+      var visibleUsers = displayedUsers.filter(function (u) {
+        return !(HMM.blocks && HMM.blocks.isEitherBlocked(u.uid));
+      });
+      if (visibleUsers.length === 0) {
         peopleContainer.innerHTML =
           '<div class="card empty-state" style="grid-column:1 / -1;"><div class="empty-state-icon">' +
           U.ICONS.search +
@@ -48,7 +53,7 @@
         return;
       }
 
-      peopleContainer.innerHTML = displayedUsers
+      peopleContainer.innerHTML = visibleUsers
         .map(function (u) {
           var isFriend = socialState.friendUids.has(u.uid);
           var isFollowing = socialState.followingUids.has(u.uid);
@@ -75,7 +80,7 @@
             '<div class="user-row-meta"><span class="user-row-name name-with-badge">' + U.escapeHtml(u.name) +
             (isOffAdmin ? U.renderAdminBadgeHtml("compact") : "") + "</span>" +
             '<span class="user-row-handle">@' + U.escapeHtml(u.username) + (u.location ? " · " + U.escapeHtml(u.location) : "") + "</span></div></a>" +
-            '<p class="person-card-bio">' + U.escapeHtml(u.bio || "Member of the HMM HMM community.") + "</p>" +
+            '<p class="person-card-bio">' + U.escapeHtml(u.bio || ("Member of the " + cfg.siteName + " community.")) + "</p>" +
             '<div class="person-card-actions">' + friendBtn + followBtn + "</div></div>"
           );
         })
@@ -84,9 +89,14 @@
 
     function renderPosts() {
       var term = currentQuery.toLowerCase();
+      var cleanTag = term.replace(/^#/, "");
       var filtered = term
         ? allPosts.filter(function (p) {
+            var hasTag =
+              Array.isArray(p.hashtags) &&
+              p.hashtags.some(function (t) { return String(t).toLowerCase() === cleanTag || String(t).toLowerCase().indexOf(cleanTag) !== -1; });
             return (
+              hasTag ||
               String(p.text || "").toLowerCase().indexOf(term) !== -1 ||
               String(p.authorName || "").toLowerCase().indexOf(term) !== -1 ||
               String(p.authorUsername || "").toLowerCase().indexOf(term) !== -1
@@ -167,12 +177,16 @@
       socialState = next;
       renderPeople();
     });
-    var unsubLikes = HMM.feed.subscribeToAllPostReactions(ctx.user.uid, function (rMap) {
+    var unsubLikes = HMM.feed.subscribeToAllPostReactions(function (rMap) {
       postManager.setReactionsMap(rMap);
       renderPosts();
     });
     var unsubPosts = HMM.feed.subscribeToFeedPosts(50, function (posts) {
       allPosts = posts;
+      renderPosts();
+    });
+    var unsubBlocks = HMM.blocks.subscribe(function () {
+      renderPeople();
       renderPosts();
     });
 
@@ -181,6 +195,7 @@
       if (unsubSocial) unsubSocial();
       if (unsubLikes) unsubLikes();
       if (unsubPosts) unsubPosts();
+      if (unsubBlocks) unsubBlocks();
       postManager.cleanup();
     });
 
