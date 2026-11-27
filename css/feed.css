@@ -1092,6 +1092,12 @@
   margin: 0 auto;
 }
 
+.native-embed-card.native-embed-square {
+  max-width: 480px;
+  width: 100%;
+  margin: 0 auto;
+}
+
 .native-embed-frame-wrap {
   position: relative;
   width: 100%;
@@ -1100,6 +1106,14 @@
 
 .native-embed-frame-wrap.ratio-16-9 {
   aspect-ratio: 16 / 9;
+}
+
+.native-embed-frame-wrap.ratio-4-3 {
+  aspect-ratio: 4 / 3;
+}
+
+.native-embed-frame-wrap.ratio-1-1 {
+  aspect-ratio: 1 / 1;
 }
 
 .native-embed-frame-wrap.ratio-9-16 {
@@ -1113,6 +1127,44 @@
   width: 100%;
   height: 100%;
   border: 0;
+}
+
+.embed-aspect-bar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 2px;
+}
+
+.embed-aspect-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-muted);
+  margin-right: 2px;
+}
+
+.embed-aspect-btn {
+  padding: 4px 10px;
+  border-radius: var(--radius-full);
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text-muted);
+  font-size: 11.5px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 0.14s ease, color 0.14s ease, border-color 0.14s ease;
+}
+
+.embed-aspect-btn:hover {
+  border-color: var(--accent);
+  color: var(--text);
+}
+
+.embed-aspect-btn.active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #FFFFFF;
 }
 
 .native-embed-bar {

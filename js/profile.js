@@ -44,6 +44,7 @@
     };
     var presence = { online: false, lastSeen: 0 };
     var userPosts = [];
+    var postsLoaded = false;
     var adminAnnouncements = [];
 
     ctx.mainEl.innerHTML =
@@ -76,6 +77,9 @@
         return;
       }
       postsSection.classList.remove("hidden");
+      if (!postsLoaded) {
+        return;
+      }
       postManager.render(
         userPosts,
         "No posts yet",
@@ -868,8 +872,15 @@
 
     renderHeader();
     loadAdminAnnouncements();
-    userPosts = await HMM.feed.getUserPosts(targetProfile.uid);
-    renderProfilePosts();
+    try {
+      userPosts = await HMM.feed.getUserPosts(targetProfile.uid);
+    } catch (postErr) {
+      console.error("Failed to load profile posts:", postErr);
+      userPosts = [];
+    } finally {
+      postsLoaded = true;
+      renderProfilePosts();
+    }
   }
 
   HMM.profile = { mountView: mountProfileView };

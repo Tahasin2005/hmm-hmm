@@ -81,7 +81,11 @@
       }
       embedProvider = parsedEmbed.provider;
       embedUrl = parsedEmbed.embedUrl;
-      embedAspect = parsedEmbed.aspect || "16:9";
+      var allowedAspects = { "16:9": true, "9:16": true, "4:3": true, "1:1": true };
+      embedAspect =
+        opts.embedAspectOverride && allowedAspects[opts.embedAspectOverride]
+          ? opts.embedAspectOverride
+          : parsedEmbed.aspect || "16:9";
     } else if (!text) {
       throw new Error("Post text cannot be empty.");
     }
@@ -189,14 +193,41 @@
   }
 
   async function getUserPosts(uid) {
-    var snap = await HMM.db
-      .collection("posts")
-      .where("authorId", "==", uid)
-      .limit(50)
-      .get();
-    return snap.docs
-      .map(function (d) { return d.data(); })
-      .sort(function (a, b) { return U.timestampToMs(b.createdAt) - U.timestampToMs(a.createdAt); });
+    if (!uid) return [];
+    var docs = [];
+    // Strategy 1: Query public posts by authorId (satisfies Firestore security rules for any signed-in viewer)
+    try {
+      var snapPublic = await HMM.db
+        .collection("posts")
+        .where("visibility", "==", "public")
+        .where("authorId", "==", uid)
+        .limit(50)
+        .get();
+      docs = snapPublic.docs.map(function (d) { return d.data(); });
+    } catch (err1) {
+      // Strategy 2: Direct authorId query (works for own profile, admin, or updated rules without composite index)
+      try {
+        var snapDirect = await HMM.db
+          .collection("posts")
+          .where("authorId", "==", uid)
+          .limit(50)
+          .get();
+        docs = snapDirect.docs.map(function (d) { return d.data(); });
+      } catch (err2) {
+        // Strategy 3: Fetch public feed batch and filter client-side (guaranteed fallback even without indexes)
+        var snapFallback = await HMM.db
+          .collection("posts")
+          .where("visibility", "==", "public")
+          .limit(120)
+          .get();
+        docs = snapFallback.docs
+          .map(function (d) { return d.data(); })
+          .filter(function (p) { return p && p.authorId === uid; });
+      }
+    }
+    return docs.sort(function (a, b) {
+      return U.timestampToMs(b.createdAt) - U.timestampToMs(a.createdAt);
+    });
   }
 
   function subscribeToAllPostReactions(onData) {
@@ -984,6 +1015,7 @@
 
       container.innerHTML = htmlParts.join("");
       U.hydrateLinkPreviews(container);
+      if (U.fitFacebookPostEmbeds) U.fitFacebookPostEmbeds(container);
 
       openComments.forEach(function (postId) {
         if (postsMap.has(postId)) {
@@ -1341,8 +1373,15 @@
       '<textarea id="post-composer-input" class="composer-textarea" maxlength="' + U.LIMITS.POST_TEXT_MAX + '" placeholder="What\'s on your mind, ' + U.escapeHtml(ctx.profile.name.split(" ")[0]) + '? Use @mentions, #hashtags, or paste any link..."></textarea>' +
       '<div id="composer-embed-box" class="composer-embed-box hidden">' +
       '<label class="form-label" for="post-embed-input" style="font-size:12.5px;margin-bottom:4px;">Paste Facebook Post/Video or YouTube embed &lt;iframe&gt; code or link</label>' +
-      '<textarea id="post-embed-input" class="form-textarea font-mono" rows="2" placeholder=\'<iframe src="https://www.facebook.com/plugins/post.php?..."></iframe> or Facebook post/video/reel or YouTube link\'></textarea>' +
+      '<textarea id="post-embed-input" class="form-textarea font-mono" rows="2" placeholder=\'<iframe src="https://www.facebook.com/plugins/video.php?..."></iframe> or Facebook post/video/reel or YouTube link\'></textarea>' +
       '<div id="composer-embed-status" class="composer-embed-status text-muted">Supports Facebook Posts (photos/text), Facebook Videos &amp; Reels, YouTube, Shorts &amp; Vimeo.</div>' +
+      '<div id="composer-embed-aspect-bar" class="embed-aspect-bar hidden">' +
+      '<span class="embed-aspect-label">Video Size:</span>' +
+      '<button type="button" class="embed-aspect-btn active" data-aspect-pick="auto">Auto</button>' +
+      '<button type="button" class="embed-aspect-btn" data-aspect-pick="16:9">Horizontal (16:9)</button>' +
+      '<button type="button" class="embed-aspect-btn" data-aspect-pick="1:1">Square (1:1)</button>' +
+      '<button type="button" class="embed-aspect-btn" data-aspect-pick="9:16">Vertical (9:16)</button>' +
+      "</div>" +
       '<div id="composer-embed-preview"></div>' +
       "</div>" +
       '<div id="composer-tagged-chips" class="composer-tagged-chips hidden"></div>' +
@@ -1372,7 +1411,9 @@
     var embedBox = document.getElementById("composer-embed-box");
     var embedInput = document.getElementById("post-embed-input");
     var embedStatus = document.getElementById("composer-embed-status");
+    var embedAspectBar = document.getElementById("composer-embed-aspect-bar");
     var embedPreviewEl = document.getElementById("composer-embed-preview");
+    var selectedEmbedAspect = "auto";
     var taggedChipsEl = document.getElementById("composer-tagged-chips");
     var counterEl = document.getElementById("composer-counter");
     var submitBtn = document.getElementById("post-submit-btn");
@@ -1669,25 +1710,61 @@
       if (!raw) {
         embedStatus.textContent = "Supports Facebook Posts (photos/text), Facebook Videos & Reels, YouTube, Shorts & Vimeo.";
         embedStatus.className = "composer-embed-status text-muted";
+        if (embedAspectBar) embedAspectBar.classList.add("hidden");
         embedPreviewEl.innerHTML = "";
         updateSubmitState();
         return;
       }
       var parsed = U.parseSafeEmbedInput(raw);
       if (parsed) {
-        embedStatus.textContent = "Valid " + parsed.label + " detected — ready to embed natively!";
+        var effectiveAspect =
+          parsed.kind !== "post" && selectedEmbedAspect !== "auto"
+            ? selectedEmbedAspect
+            : parsed.aspect;
+        var previewPayload = Object.assign({}, parsed, { aspect: effectiveAspect });
+        var detectedName =
+          parsed.provider === "facebook" && parsed.kind !== "post"
+            ? effectiveAspect === "9:16"
+              ? "Facebook Reel (Vertical)"
+              : "Facebook Video (" + (parsed.width && parsed.height && selectedEmbedAspect === "auto" ? parsed.width + "×" + parsed.height : effectiveAspect) + ")"
+            : parsed.label;
+        embedStatus.textContent = "Valid " + detectedName + " detected — ready to embed natively!";
         embedStatus.className = "composer-embed-status ok";
-        embedPreviewEl.innerHTML = U.renderEmbedPlayerHtml(parsed);
+        if (embedAspectBar) {
+          embedAspectBar.classList.toggle("hidden", parsed.kind === "post");
+        }
+        embedPreviewEl.innerHTML = U.renderEmbedPlayerHtml(previewPayload);
         if (U.fitFacebookPostEmbeds) U.fitFacebookPostEmbeds(embedPreviewEl);
       } else {
         embedStatus.textContent = "Unrecognized embed. Paste a Facebook Post/Video or YouTube/Vimeo <iframe> code or link.";
         embedStatus.className = "composer-embed-status err";
+        if (embedAspectBar) embedAspectBar.classList.add("hidden");
         embedPreviewEl.innerHTML = "";
       }
       updateSubmitState();
     }
 
-    embedInput.addEventListener("input", updateEmbedPreview);
+    if (embedAspectBar) {
+      embedAspectBar.addEventListener("click", function (e) {
+        var btn = e.target.closest("[data-aspect-pick]");
+        if (!btn) return;
+        selectedEmbedAspect = btn.dataset.aspectPick || "auto";
+        embedAspectBar.querySelectorAll("[data-aspect-pick]").forEach(function (b) {
+          b.classList.toggle("active", b === btn);
+        });
+        updateEmbedPreview();
+      });
+    }
+
+    embedInput.addEventListener("input", function () {
+      selectedEmbedAspect = "auto";
+      if (embedAspectBar) {
+        embedAspectBar.querySelectorAll("[data-aspect-pick]").forEach(function (b) {
+          b.classList.toggle("active", b.dataset.aspectPick === "auto");
+        });
+      }
+      updateEmbedPreview();
+    });
 
     function renderFiltered() {
       var list =
@@ -1730,12 +1807,20 @@
         await createPost(ctx.profile, inputEl.value, {
           postType: composerMode,
           embedRaw: composerMode === "embed" ? embedInput.value : "",
+          embedAspectOverride: composerMode === "embed" && selectedEmbedAspect !== "auto" ? selectedEmbedAspect : "",
           taggedUsers: Array.from(taggedUsersMap.values()),
         });
         inputEl.value = "";
         embedInput.value = "";
+        selectedEmbedAspect = "auto";
+        if (embedAspectBar) {
+          embedAspectBar.classList.add("hidden");
+          embedAspectBar.querySelectorAll("[data-aspect-pick]").forEach(function (b) {
+            b.classList.toggle("active", b.dataset.aspectPick === "auto");
+          });
+        }
         embedPreviewEl.innerHTML = "";
-        embedStatus.textContent = "Supports YouTube, YouTube Shorts, Facebook Videos, Facebook Reels & Vimeo.";
+        embedStatus.textContent = "Supports Facebook Posts (photos/text), Facebook Videos & Reels, YouTube, Shorts & Vimeo.";
         embedStatus.className = "composer-embed-status text-muted";
         taggedUsersMap.clear();
         renderTaggedChips();

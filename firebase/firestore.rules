@@ -691,11 +691,7 @@ service cloud.firestore {
         isAdmin()
       );
 
-      allow list: if isSignedIn() && (
-        resource.data.visibility == 'public' ||
-        resource.data.authorId == request.auth.uid ||
-        isBootstrappedAdmin()
-      );
+      allow list: if isSignedIn();
 
       allow create: if isVerifiedUser()
         && isValidId(postId)

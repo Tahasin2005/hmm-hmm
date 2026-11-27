@@ -501,14 +501,18 @@
     if (!str) return { src: "", width: 0, height: 0 };
     if (str.indexOf("<") !== -1 && /<iframe\b/i.test(str)) {
       var srcMatch = str.match(/\bsrc\s*=\s*(?:"([^"]+)"|'([^']+)'|([^\s>]+))/i);
-      var wMatch = str.match(/\bwidth\s*=\s*"?(\d{2,4})"?/i);
-      var hMatch = str.match(/\bheight\s*=\s*"?(\d{2,4})"?/i);
       var rawSrc = srcMatch ? (srcMatch[1] || srcMatch[2] || srcMatch[3] || "") : "";
       rawSrc = rawSrc.replace(/&amp;/g, "&").trim();
+      // Strip src attribute before matching outer iframe width/height attributes
+      var withoutSrc = str.replace(/\bsrc\s*=\s*(?:"[^"]*"|'[^']*'|[^\s>]+)/i, "");
+      var wMatch = withoutSrc.match(/\bwidth\s*=\s*(?:"(\d{2,4})[^"]*"|'(\d{2,4})[^']*'|(\d{2,4}))/i);
+      var hMatch = withoutSrc.match(/\bheight\s*=\s*(?:"(\d{2,4})[^"]*"|'(\d{2,4})[^']*'|(\d{2,4}))/i);
+      var wVal = wMatch ? parseInt(wMatch[1] || wMatch[2] || wMatch[3] || "0", 10) : 0;
+      var hVal = hMatch ? parseInt(hMatch[1] || hMatch[2] || hMatch[3] || "0", 10) : 0;
       return {
         src: rawSrc,
-        width: wMatch ? parseInt(wMatch[1], 10) : 0,
-        height: hMatch ? parseInt(hMatch[1], 10) : 0,
+        width: wVal,
+        height: hVal,
       };
     }
     return { src: str, width: 0, height: 0 };
@@ -597,10 +601,12 @@
         var hrefParam = parsed.searchParams.get("href");
         if (!hrefParam) return null;
         var showVidText = parsed.searchParams.get("show_text") === "true";
-        var vidW = parseInt(extracted.width || parsed.searchParams.get("width") || 0, 10) || 560;
-        var vidH = parseInt(extracted.height || parsed.searchParams.get("height") || 0, 10) || 0;
+        var paramW = parseInt(parsed.searchParams.get("width") || "0", 10) || 0;
+        var paramH = parseInt(parsed.searchParams.get("height") || "0", 10) || 0;
+        var vidW = extracted.width || paramW || 0;
+        var vidH = extracted.height || paramH || 0;
         if (showVidText && vidH >= 320) {
-          var clampedVidW = Math.max(350, Math.min(560, vidW));
+          var clampedVidW = Math.max(350, Math.min(560, vidW || 500));
           var clampedVidH = Math.max(320, Math.min(1400, vidH));
           return {
             provider: "facebook",
@@ -619,20 +625,53 @@
             label: "Facebook Video Post",
           };
         }
-        var isVerticalPlugin =
-          hrefParam.indexOf("/reel") !== -1 ||
-          (extracted.height > 0 && extracted.width > 0 && extracted.height > extracted.width * 1.1);
+
+        // Respect explicit iframe/URL width & height FIRST (Facebook uses /reel/ URLs for horizontal videos too!)
+        var hasExplicitDims = vidW > 0 && vidH > 0;
+        var fbAspect = "16:9";
+        var fbLabel = "Facebook Video";
+        var outW = 0;
+        var outH = 0;
+
+        if (hasExplicitDims) {
+          outW = Math.max(220, Math.min(800, vidW));
+          outH = Math.max(160, Math.min(1000, vidH));
+          var dimRatio = outW / outH;
+          if (dimRatio < 0.85) {
+            fbAspect = "9:16";
+            fbLabel = "Facebook Reel";
+          } else if (dimRatio <= 1.15) {
+            fbAspect = "1:1";
+            fbLabel = "Facebook Video";
+          } else if (dimRatio < 1.5) {
+            fbAspect = "4:3";
+            fbLabel = "Facebook Video";
+          } else {
+            fbAspect = "16:9";
+            fbLabel = "Facebook Video";
+          }
+        } else {
+          var isReelFallback = hrefParam.indexOf("/reel") !== -1;
+          fbAspect = isReelFallback ? "9:16" : "16:9";
+          fbLabel = isReelFallback ? "Facebook Reel" : "Facebook Video";
+        }
+
         var cleanFbUrl =
           "https://www.facebook.com/plugins/video.php?href=" +
           encodeURIComponent(hrefParam) +
-          "&show_text=false&width=560";
+          "&show_text=false&width=" +
+          (outW || 560) +
+          (outH ? "&height=" + outH : "");
+
         return {
           provider: "facebook",
           kind: "video",
           embedUrl: cleanFbUrl,
           sourceUrl: hrefParam,
-          aspect: isVerticalPlugin ? "9:16" : "16:9",
-          label: isVerticalPlugin ? "Facebook Reel" : "Facebook Video",
+          width: outW,
+          height: outH,
+          aspect: fbAspect,
+          label: fbLabel,
         };
       }
       if (parsed.pathname.indexOf("/plugins/post.php") === 0) {
@@ -813,7 +852,25 @@
     }
 
     var aspect = embedObj.aspect || safe.aspect || "16:9";
+    var hasExactDims =
+      safe.width > 0 &&
+      safe.height > 0 &&
+      (!embedObj.aspect || embedObj.aspect === safe.aspect);
+
     var isVertical = aspect === "9:16";
+    var isSquare = aspect === "1:1";
+    var ratioClass =
+      aspect === "9:16"
+        ? "ratio-9-16"
+        : aspect === "1:1"
+        ? "ratio-1-1"
+        : aspect === "4:3"
+        ? "ratio-4-3"
+        : "ratio-16-9";
+    var exactRatioStyle = hasExactDims
+      ? ' style="aspect-ratio:' + safe.width + " / " + safe.height + ';"'
+      : "";
+
     var providerLabel =
       safe.provider === "youtube"
         ? "YouTube"
@@ -821,25 +878,42 @@
         ? "Facebook"
         : "Vimeo";
 
+    var displayLabel = safe.label || providerLabel + " Video";
+    if (safe.provider === "facebook" && !isVertical) {
+      displayLabel = "Facebook Video";
+    } else if (safe.provider === "facebook" && isVertical) {
+      displayLabel = "Facebook Reel";
+    }
+
+    var safeVidSource =
+      safe.sourceUrl && validateOptionalUrl(safe.sourceUrl) === null ? safe.sourceUrl : "";
+
     return (
       '<div class="native-embed-card ' +
-      (isVertical ? "native-embed-vertical" : "") +
+      (isVertical ? "native-embed-vertical" : isSquare ? "native-embed-square" : "") +
       '">' +
       '<div class="native-embed-frame-wrap ' +
-      (isVertical ? "ratio-9-16" : "ratio-16-9") +
-      '">' +
+      ratioClass +
+      '"' +
+      exactRatioStyle +
+      ">" +
       '<iframe src="' +
       escapeHtml(safe.embedUrl) +
       '" title="' +
-      escapeHtml(providerLabel) +
-      ' embedded video" frameborder="0" scrolling="no" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen loading="lazy" referrerpolicy="strict-origin-when-cross-origin"></iframe>' +
+      escapeHtml(displayLabel) +
+      '" frameborder="0" scrolling="no" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen loading="lazy" referrerpolicy="strict-origin-when-cross-origin"></iframe>' +
       "</div>" +
       '<div class="native-embed-bar">' +
       '<span class="native-embed-provider">' +
       ICONS.video +
       "<span>" +
-      escapeHtml(safe.label || providerLabel + " Video") +
+      escapeHtml(displayLabel) +
       "</span></span>" +
+      (safeVidSource
+        ? '<a href="' +
+          escapeHtml(safeVidSource) +
+          '" target="_blank" rel="noopener noreferrer" class="native-embed-ext-link">Open original &rarr;</a>'
+        : "") +
       "</div></div>"
     );
   }
