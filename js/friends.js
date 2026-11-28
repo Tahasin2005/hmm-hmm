@@ -52,7 +52,7 @@
         .onSnapshot(
           function (snap) {
             state.incomingRequests = snap.docs
-              .map(function (d) { return d.data(); })
+              .map(function (d) { return Object.assign({ requestId: d.id }, d.data()); })
               .filter(function (r) { return r.status === "pending"; })
               .sort(function (a, b) { return U.timestampToMs(b.createdAt) - U.timestampToMs(a.createdAt); });
             emit();
@@ -66,7 +66,7 @@
         .onSnapshot(
           function (snap) {
             state.outgoingRequests = snap.docs
-              .map(function (d) { return d.data(); })
+              .map(function (d) { return Object.assign({ requestId: d.id }, d.data()); })
               .filter(function (r) { return r.status === "pending"; })
               .sort(function (a, b) { return U.timestampToMs(b.createdAt) - U.timestampToMs(a.createdAt); });
             emit();
@@ -171,28 +171,65 @@
   }
 
   async function acceptFriendRequest(request, accepter) {
+    var reqId = request.requestId || U.getFriendRequestId(request.senderId, request.receiverId);
     var pairId = U.getPairId(request.senderId, request.receiverId);
     var pair = U.getSortedPair(request.senderId, request.receiverId);
-    var batch = HMM.db.batch();
+    var friendshipRef = HMM.db.collection("friendships").doc(pairId);
+    var reqRef = HMM.db.collection("friendRequests").doc(reqId);
+    var reverseReqRef = HMM.db.collection("friendRequests").doc(U.getFriendRequestId(request.receiverId, request.senderId));
 
-    batch.update(HMM.db.collection("friendRequests").doc(request.requestId), {
-      status: "accepted",
-      updatedAt: HMM.serverTimestamp(),
-    });
-    batch.set(HMM.db.collection("friendships").doc(pairId), {
+    // Check if friendship already exists (prevents hitting allow update: if false on friendships)
+    var alreadyFriends = false;
+    try {
+      var existingFs = await friendshipRef.get();
+      alreadyFriends = existingFs.exists;
+    } catch (e) {
+      alreadyFriends = false;
+    }
+
+    if (alreadyFriends) {
+      try {
+        await reqRef.update({
+          status: "accepted",
+          updatedAt: HMM.serverTimestamp(),
+        });
+      } catch (err) {
+        await reqRef.delete();
+      }
+      await reverseReqRef.delete().catch(function () {});
+      return;
+    }
+
+    // Core atomic batch: create friendship + mark friendRequest accepted
+    // (Counter increments run right after so a user-profile counter quirk never rolls back acceptance)
+    var batch = HMM.db.batch();
+    batch.set(friendshipRef, {
       friendshipId: pairId,
       user1Id: pair[0],
       user2Id: pair[1],
       participants: [pair[0], pair[1]],
       createdAt: HMM.serverTimestamp(),
     });
-    batch.update(HMM.db.collection("users").doc(request.senderId), {
-      friendsCount: HMM.increment(1),
-    });
-    batch.update(HMM.db.collection("users").doc(request.receiverId), {
-      friendsCount: HMM.increment(1),
+    batch.update(reqRef, {
+      status: "accepted",
+      updatedAt: HMM.serverTimestamp(),
     });
     await batch.commit();
+
+    // Clean up any opposite-direction pending request & sync both users' friendsCount
+    await Promise.all([
+      reverseReqRef.delete().catch(function () {}),
+      HMM.db
+        .collection("users")
+        .doc(request.senderId)
+        .update({ friendsCount: HMM.increment(1) })
+        .catch(function (err) { console.warn("Sender friendsCount sync skipped:", err); }),
+      HMM.db
+        .collection("users")
+        .doc(request.receiverId)
+        .update({ friendsCount: HMM.increment(1) })
+        .catch(function (err) { console.warn("Receiver friendsCount sync skipped:", err); }),
+    ]);
 
     await U.createNotificationRecord({
       recipientId: request.senderId,
@@ -205,13 +242,19 @@
 
   async function removeFriend(myUid, friendUid) {
     var pairId = U.getPairId(myUid, friendUid);
-    var batch = HMM.db.batch();
-    batch.delete(HMM.db.collection("friendships").doc(pairId));
-    batch.update(HMM.db.collection("users").doc(myUid), { friendsCount: HMM.increment(-1) });
-    batch.update(HMM.db.collection("users").doc(friendUid), { friendsCount: HMM.increment(-1) });
-    await batch.commit();
+    await HMM.db.collection("friendships").doc(pairId).delete();
 
     await Promise.all([
+      HMM.db
+        .collection("users")
+        .doc(myUid)
+        .update({ friendsCount: HMM.increment(-1) })
+        .catch(function () {}),
+      HMM.db
+        .collection("users")
+        .doc(friendUid)
+        .update({ friendsCount: HMM.increment(-1) })
+        .catch(function () {}),
       HMM.db.collection("friendRequests").doc(U.getFriendRequestId(myUid, friendUid)).delete().catch(function () {}),
       HMM.db.collection("friendRequests").doc(U.getFriendRequestId(friendUid, myUid)).delete().catch(function () {}),
     ]);
@@ -226,16 +269,25 @@
     var existing = await HMM.db.collection("follows").doc(followId).get();
     if (existing.exists) return;
 
-    var batch = HMM.db.batch();
-    batch.set(HMM.db.collection("follows").doc(followId), {
+    await HMM.db.collection("follows").doc(followId).set({
       followId: followId,
       followerId: me.uid,
       followingId: targetUid,
       createdAt: HMM.serverTimestamp(),
     });
-    batch.update(HMM.db.collection("users").doc(me.uid), { followingCount: HMM.increment(1) });
-    batch.update(HMM.db.collection("users").doc(targetUid), { followersCount: HMM.increment(1) });
-    await batch.commit();
+
+    await Promise.all([
+      HMM.db
+        .collection("users")
+        .doc(me.uid)
+        .update({ followingCount: HMM.increment(1) })
+        .catch(function () {}),
+      HMM.db
+        .collection("users")
+        .doc(targetUid)
+        .update({ followersCount: HMM.increment(1) })
+        .catch(function () {}),
+    ]);
 
     await U.createNotificationRecord({
       recipientId: targetUid,
@@ -251,11 +303,20 @@
     var existing = await HMM.db.collection("follows").doc(followId).get();
     if (!existing.exists) return;
 
-    var batch = HMM.db.batch();
-    batch.delete(HMM.db.collection("follows").doc(followId));
-    batch.update(HMM.db.collection("users").doc(myUid), { followingCount: HMM.increment(-1) });
-    batch.update(HMM.db.collection("users").doc(targetUid), { followersCount: HMM.increment(-1) });
-    await batch.commit();
+    await HMM.db.collection("follows").doc(followId).delete();
+
+    await Promise.all([
+      HMM.db
+        .collection("users")
+        .doc(myUid)
+        .update({ followingCount: HMM.increment(-1) })
+        .catch(function () {}),
+      HMM.db
+        .collection("users")
+        .doc(targetUid)
+        .update({ followersCount: HMM.increment(-1) })
+        .catch(function () {}),
+    ]);
   }
 
   // ============================================================================

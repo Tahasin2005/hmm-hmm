@@ -546,9 +546,84 @@ service cloud.firestore {
 
       allow update: if isVerifiedUser()
         && isValidId(uid)
-        && incoming().uid == existing().uid
-        && incoming().createdAt == existing().createdAt
+        && (!('uid' in existing()) || incoming().uid == existing().uid)
+        && (!('createdAt' in existing()) || incoming().createdAt == existing().createdAt)
         && (
+          (
+            incoming().diff(existing()).affectedKeys().hasOnly(['friendsCount'])
+            && incoming().friendsCount is number && incoming().friendsCount >= 0
+            && (
+              (
+                incoming().friendsCount == (('friendsCount' in existing() ? existing().friendsCount : 0) + 1)
+                && (
+                  isOwner(uid) ||
+                  isAdmin() ||
+                  existsAfter(/databases/$(database)/documents/friendships/$(pairId(request.auth.uid, uid)))
+                )
+              ) || (
+                ('friendsCount' in existing() ? existing().friendsCount : 0) > 0
+                && incoming().friendsCount == existing().friendsCount - 1
+                && (
+                  isOwner(uid) ||
+                  isAdmin() ||
+                  !existsAfter(/databases/$(database)/documents/friendships/$(pairId(request.auth.uid, uid)))
+                )
+              )
+            )
+          ) ||
+          (
+            (isOwner(uid) || isAdmin())
+            && incoming().diff(existing()).affectedKeys().hasOnly(['postsCount'])
+            && incoming().postsCount is number && incoming().postsCount >= 0
+            && (
+              incoming().postsCount == (('postsCount' in existing() ? existing().postsCount : 0) + 1) ||
+              (('postsCount' in existing() ? existing().postsCount : 0) > 0 && incoming().postsCount == existing().postsCount - 1)
+            )
+          ) ||
+          (
+            (isOwner(uid) || isAdmin())
+            && incoming().diff(existing()).affectedKeys().hasOnly(['followingCount'])
+            && incoming().followingCount is number && incoming().followingCount >= 0
+            && (
+              incoming().followingCount == (('followingCount' in existing() ? existing().followingCount : 0) + 1) ||
+              (('followingCount' in existing() ? existing().followingCount : 0) > 0 && incoming().followingCount == existing().followingCount - 1)
+            )
+          ) ||
+          (
+            (!isOwner(uid) || isAdmin())
+            && incoming().diff(existing()).affectedKeys().hasOnly(['followersCount'])
+            && incoming().followersCount is number && incoming().followersCount >= 0
+            && (
+              (
+                incoming().followersCount == (('followersCount' in existing() ? existing().followersCount : 0) + 1)
+                && (existsAfter(/databases/$(database)/documents/follows/$(request.auth.uid + '_' + uid)) || isAdmin())
+              ) || (
+                ('followersCount' in existing() ? existing().followersCount : 0) > 0
+                && incoming().followersCount == existing().followersCount - 1
+                && (!existsAfter(/databases/$(database)/documents/follows/$(request.auth.uid + '_' + uid)) || isAdmin())
+              )
+            )
+          ) ||
+          (
+            (
+              isAdmin() ||
+              (isOwner(uid) && 'isVerified' in existing() && existing().isVerified == true)
+            )
+            && incoming().diff(existing()).affectedKeys().hasOnly(['coverPhotoUrl', 'updatedAt'])
+            && incoming().coverPhotoUrl is string && incoming().coverPhotoUrl.size() <= 350000
+            && incoming().updatedAt == request.time
+          ) ||
+          (
+            (isOwner(uid) || isAdmin())
+            && incoming().diff(existing()).affectedKeys().hasOnly(['avatarUrl', 'updatedAt'])
+            && incoming().avatarUrl is string && incoming().avatarUrl.size() <= 160000
+            && incoming().updatedAt == request.time
+          ) ||
+          (
+            isAdmin()
+            && incoming().diff(existing()).affectedKeys().hasOnly(['isSuspended', 'isVerified', 'role', 'postsCount', 'updatedAt'])
+            && (!('isVerified' in incoming()) || incoming().isVerified is bool)
+          ) ||
           (
             isOwner(uid)
             && isValidUserProfile(incoming(), uid)
@@ -581,81 +656,6 @@ service cloud.firestore {
               'coverPhotoUrl', 'isVerified', 'visibility', 'friendRequestPref', 'updatedAt'
             ])
             && incoming().updatedAt == request.time
-          ) ||
-          (
-            (
-              isAdmin() ||
-              (isOwner(uid) && 'isVerified' in existing() && existing().isVerified == true)
-            )
-            && incoming().diff(existing()).affectedKeys().hasOnly(['coverPhotoUrl', 'updatedAt'])
-            && incoming().coverPhotoUrl is string && incoming().coverPhotoUrl.size() <= 350000
-            && incoming().updatedAt == request.time
-          ) ||
-          (
-            (isOwner(uid) || isAdmin())
-            && incoming().diff(existing()).affectedKeys().hasOnly(['avatarUrl', 'updatedAt'])
-            && incoming().avatarUrl is string && incoming().avatarUrl.size() <= 160000
-            && incoming().updatedAt == request.time
-          ) ||
-          (
-            (isOwner(uid) || isAdmin())
-            && incoming().diff(existing()).affectedKeys().hasOnly(['postsCount'])
-            && incoming().postsCount is int && incoming().postsCount >= 0
-            && (
-              incoming().postsCount == (('postsCount' in existing() ? existing().postsCount : 0) + 1) ||
-              (('postsCount' in existing() ? existing().postsCount : 0) > 0 && incoming().postsCount == existing().postsCount - 1)
-            )
-          ) ||
-          (
-            (isOwner(uid) || isAdmin())
-            && incoming().diff(existing()).affectedKeys().hasOnly(['followingCount'])
-            && incoming().followingCount is int && incoming().followingCount >= 0
-            && (
-              incoming().followingCount == (('followingCount' in existing() ? existing().followingCount : 0) + 1) ||
-              (('followingCount' in existing() ? existing().followingCount : 0) > 0 && incoming().followingCount == existing().followingCount - 1)
-            )
-          ) ||
-          (
-            (!isOwner(uid) || isAdmin())
-            && incoming().diff(existing()).affectedKeys().hasOnly(['followersCount'])
-            && incoming().followersCount is int && incoming().followersCount >= 0
-            && (
-              (
-                incoming().followersCount == (('followersCount' in existing() ? existing().followersCount : 0) + 1)
-                && (existsAfter(/databases/$(database)/documents/follows/$(request.auth.uid + '_' + uid)) || isAdmin())
-              ) || (
-                ('followersCount' in existing() ? existing().followersCount : 0) > 0
-                && incoming().followersCount == existing().followersCount - 1
-                && (!existsAfter(/databases/$(database)/documents/follows/$(request.auth.uid + '_' + uid)) || isAdmin())
-              )
-            )
-          ) ||
-          (
-            incoming().diff(existing()).affectedKeys().hasOnly(['friendsCount'])
-            && incoming().friendsCount is int && incoming().friendsCount >= 0
-            && (
-              (
-                incoming().friendsCount == (('friendsCount' in existing() ? existing().friendsCount : 0) + 1)
-                && (
-                  isOwner(uid) ||
-                  isAdmin() ||
-                  existsAfter(/databases/$(database)/documents/friendships/$(pairId(request.auth.uid, uid)))
-                )
-              ) || (
-                ('friendsCount' in existing() ? existing().friendsCount : 0) > 0
-                && incoming().friendsCount == existing().friendsCount - 1
-                && (
-                  isOwner(uid) ||
-                  isAdmin() ||
-                  !existsAfter(/databases/$(database)/documents/friendships/$(pairId(request.auth.uid, uid)))
-                )
-              )
-            )
-          ) ||
-          (
-            isAdmin()
-            && incoming().diff(existing()).affectedKeys().hasOnly(['isSuspended', 'isVerified', 'role', 'postsCount', 'updatedAt'])
-            && (!('isVerified' in incoming()) || incoming().isVerified is bool)
           )
         );
 
@@ -893,7 +893,7 @@ service cloud.firestore {
         && incoming().requestId == existing().requestId
         && incoming().senderId == existing().senderId
         && incoming().receiverId == existing().receiverId
-        && incoming().createdAt == existing().createdAt
+        && (!('createdAt' in existing()) || incoming().createdAt == existing().createdAt)
         && incoming().updatedAt == request.time
         && incoming().diff(existing()).affectedKeys().hasOnly(['status', 'updatedAt'])
         && (
@@ -939,11 +939,17 @@ service cloud.firestore {
         && isValidFriendship(incoming(), friendshipId)
         && (incoming().user1Id == request.auth.uid || incoming().user2Id == request.auth.uid || isAdmin())
         && incoming().createdAt == request.time
-        && isNotBlockedEither(incoming().user1Id, incoming().user2Id)
+        && (isNotBlockedEither(incoming().user1Id, incoming().user2Id) || isAdmin())
         && exists(/databases/$(database)/documents/users/$(incoming().user1Id))
         && exists(/databases/$(database)/documents/users/$(incoming().user2Id));
 
-      allow update: if false;
+      allow update: if isVerifiedUser()
+        && isValidId(friendshipId)
+        && isValidFriendship(incoming(), friendshipId)
+        && incoming().friendshipId == existing().friendshipId
+        && incoming().user1Id == existing().user1Id
+        && incoming().user2Id == existing().user2Id
+        && (existing().user1Id == request.auth.uid || existing().user2Id == request.auth.uid || isAdmin());
 
       allow delete: if isVerifiedUser() && isValidId(friendshipId) && (
         existing().user1Id == request.auth.uid ||
