@@ -1033,27 +1033,47 @@
       }
     }
 
+    function isTouchLikeDevice() {
+      try {
+        return window.matchMedia("(hover: none)").matches || window.innerWidth <= 820;
+      } catch (e) {
+        return window.innerWidth <= 820;
+      }
+    }
+
+    function closeAllReactionDocks(exceptWrap) {
+      container.querySelectorAll(".reaction-picker-wrap.dock-open, .reaction-picker-wrap.open").forEach(function (w) {
+        if (w !== exceptWrap) {
+          w.classList.remove("dock-open");
+          w.classList.remove("open");
+        }
+      });
+    }
+
     function onDocClick(e) {
       if (!e.target.closest(".post-menu-wrap")) {
         container.querySelectorAll(".post-dropdown").forEach(function (d) { d.classList.add("hidden"); });
       }
       if (!e.target.closest(".reaction-picker-wrap")) {
-        container.querySelectorAll(".reaction-picker-wrap.open").forEach(function (w) { w.classList.remove("open"); });
+        closeAllReactionDocks(null);
       }
     }
     document.addEventListener("click", onDocClick);
 
     var touchTimer = null;
+    var longPressTriggered = false;
     container.addEventListener("touchstart", function (e) {
       if (readOnly) return;
       var trigger = e.target.closest("[data-quick-react], [data-comment-quick-react]");
       if (!trigger) return;
       var wrap = trigger.closest(".reaction-picker-wrap");
       if (!wrap) return;
+      longPressTriggered = false;
       touchTimer = setTimeout(function () {
-        container.querySelectorAll(".reaction-picker-wrap.open").forEach(function (w) { w.classList.remove("open"); });
-        wrap.classList.add("open");
-      }, 320);
+        longPressTriggered = true;
+        closeAllReactionDocks(wrap);
+        wrap.classList.add("dock-open");
+      }, 280);
     }, { passive: true });
     container.addEventListener("touchend", function () { clearTimeout(touchTimer); }, { passive: true });
     container.addEventListener("touchmove", function () { clearTimeout(touchTimer); }, { passive: true });
@@ -1128,7 +1148,10 @@
         var rType = postReactBtn.dataset.reactionType;
         var postObj = postsMap.get(rPid);
         var wrapEl = postReactBtn.closest(".reaction-picker-wrap");
-        if (wrapEl) wrapEl.classList.remove("open");
+        if (wrapEl) {
+          wrapEl.classList.remove("dock-open");
+          wrapEl.classList.remove("open");
+        }
         if (!postObj) return;
         try {
           await setPostReaction(postObj, ctx.profile, getMyPostReaction(rPid), rType);
@@ -1140,6 +1163,21 @@
 
       var quickReactBtn = e.target.closest("[data-quick-react]");
       if (quickReactBtn) {
+        if (longPressTriggered) {
+          longPressTriggered = false;
+          return;
+        }
+        var qWrap = quickReactBtn.closest(".reaction-picker-wrap");
+        // On mobile/touch screens: first tap opens the 7-reaction dock so users can pick any reaction easily
+        if (isTouchLikeDevice() && qWrap && !qWrap.classList.contains("dock-open")) {
+          closeAllReactionDocks(qWrap);
+          qWrap.classList.add("dock-open");
+          return;
+        }
+        if (qWrap) {
+          qWrap.classList.remove("dock-open");
+          qWrap.classList.remove("open");
+        }
         var qPid = quickReactBtn.dataset.quickReact;
         var qPost = postsMap.get(qPid);
         if (!qPost) return;
@@ -1162,7 +1200,10 @@
         var cPostId = parts[1];
         var cType = cmtReactBtn.dataset.reactionType;
         var cWrap = cmtReactBtn.closest(".reaction-picker-wrap");
-        if (cWrap) cWrap.classList.remove("open");
+        if (cWrap) {
+          cWrap.classList.remove("dock-open");
+          cWrap.classList.remove("open");
+        }
         var cmts = commentsByPost.get(cPostId) || [];
         var targetCmt = cmts.find(function (x) { return x.commentId === cid; });
         if (!targetCmt) return;
@@ -1176,6 +1217,20 @@
 
       var cmtQuickBtn = e.target.closest("[data-comment-quick-react]");
       if (cmtQuickBtn) {
+        if (longPressTriggered) {
+          longPressTriggered = false;
+          return;
+        }
+        var cqWrap = cmtQuickBtn.closest(".reaction-picker-wrap");
+        if (isTouchLikeDevice() && cqWrap && !cqWrap.classList.contains("dock-open")) {
+          closeAllReactionDocks(cqWrap);
+          cqWrap.classList.add("dock-open");
+          return;
+        }
+        if (cqWrap) {
+          cqWrap.classList.remove("dock-open");
+          cqWrap.classList.remove("open");
+        }
         var qCid = cmtQuickBtn.dataset.commentQuickReact;
         var qCPid = cmtQuickBtn.dataset.postId;
         var qCmts = commentsByPost.get(qCPid) || [];
@@ -1334,13 +1389,378 @@
   }
 
   // ============================================================================
+  // VISITED PROFILES AFFINITY & SMART FEED ORDERING
+  // ============================================================================
+  var VISITED_PROFILES_KEY = "klorix_visited_profiles";
+
+  function getVisitedProfilesMap() {
+    try {
+      var raw = localStorage.getItem(VISITED_PROFILES_KEY);
+      var parsed = raw ? JSON.parse(raw) : {};
+      return parsed && typeof parsed === "object" ? parsed : {};
+    } catch (e) {
+      return {};
+    }
+  }
+
+  function recordProfileVisit(uid) {
+    if (!uid) return;
+    try {
+      var map = getVisitedProfilesMap();
+      var prev = map[uid] || { count: 0, lastAt: 0 };
+      map[uid] = { count: Math.min((prev.count || 0) + 1, 50), lastAt: Date.now() };
+      var keys = Object.keys(map);
+      if (keys.length > 60) {
+        keys.sort(function (a, b) { return (map[b].lastAt || 0) - (map[a].lastAt || 0); });
+        var trimmed = {};
+        keys.slice(0, 60).forEach(function (k) { trimmed[k] = map[k]; });
+        map = trimmed;
+      }
+      localStorage.setItem(VISITED_PROFILES_KEY, JSON.stringify(map));
+    } catch (e) {}
+  }
+
+  function rankSmartFeedPosts(posts, viewerUid, socialState) {
+    if (!Array.isArray(posts) || posts.length <= 1) return posts || [];
+    var visited = getVisitedProfilesMap();
+    var now = Date.now();
+
+    var preferred = [];
+    var community = [];
+
+    posts.forEach(function (p) {
+      var ts = U.timestampToMs(p.createdAt) || 0;
+      var ageHours = Math.max(0, (now - ts) / 3600000);
+      var isOwn = p.authorId === viewerUid;
+      var isFriend = socialState && socialState.friendUids && socialState.friendUids.has(p.authorId);
+      var isFollowing = socialState && socialState.followingUids && socialState.followingUids.has(p.authorId);
+      var visitRec = visited[p.authorId];
+      var visitCount = visitRec ? visitRec.count || 0 : 0;
+
+      // Freshness decay combined with personal relationship affinity
+      var recencyScore = Math.max(0, 120 - ageHours * 1.4);
+      var affinityBoost =
+        (isOwn ? (ageHours < 6 ? 70 : 25) : 0) +
+        (isFriend ? 55 : 0) +
+        (isFollowing ? 38 : 0) +
+        Math.min(visitCount * 8, 32);
+
+      var entry = { post: p, score: recencyScore + affinityBoost, ts: ts };
+      if (isOwn || isFriend || isFollowing || visitCount >= 2) {
+        preferred.push(entry);
+      } else {
+        community.push(entry);
+      }
+    });
+
+    preferred.sort(function (a, b) { return b.score - a.score || b.ts - a.ts; });
+    community.sort(function (a, b) { return b.score - a.score || b.ts - a.ts; });
+
+    // Show friends/following/visited posts prominently first, then naturally interleave community discovery posts
+    var result = [];
+    var pIdx = 0;
+    var cIdx = 0;
+    while (pIdx < preferred.length || cIdx < community.length) {
+      for (var k = 0; k < 2 && pIdx < preferred.length; k++) {
+        result.push(preferred[pIdx++].post);
+      }
+      if (cIdx < community.length) {
+        result.push(community[cIdx++].post);
+      }
+    }
+    return result;
+  }
+
+  // ============================================================================
+  // REUSABLE FACEBOOK-STYLE COMPACT CLICK-TO-EXPAND POST COMPOSER
+  // ============================================================================
+  function mountCompactComposer(containerEl, ctx, options) {
+    if (!containerEl) return { cleanup: function () {}, expandWithText: function () {} };
+    var opts = options || {};
+    var composerMode = "text"; // 'text' | 'embed'
+    var selectedEmbedAspect = "auto";
+    var isExpanded = false;
+    var isMeAdmin = U.isOfficialAdminUser(ctx.profile) || ctx.isAdmin;
+    var firstName = (ctx.profile.name || "Friend").split(" ")[0];
+    var uidPrefix = "cmp_" + Math.random().toString(36).slice(2, 7);
+
+    containerEl.innerHTML =
+      '<section class="card composer-card fb-composer-card" id="' + uidPrefix + '_card">' +
+      // Default collapsed single-row Facebook-style bar (Prompt box left + clickable Profile Avatar right)
+      '<div class="fb-composer-bar" id="' + uidPrefix + '_collapsed">' +
+      '<button type="button" class="fb-composer-trigger" id="' + uidPrefix + '_trigger">' +
+      "What's on your mind, " + U.escapeHtml(firstName) + "?</button>" +
+      '<a href="#profile" class="fb-composer-avatar-link" title="My Profile" aria-label="My Profile">' +
+      U.renderAvatarHtml({
+        name: ctx.profile.name,
+        avatarUrl: ctx.profile.avatarUrl,
+        avatarColor: ctx.profile.avatarColor,
+        size: "md",
+        isAdmin: isMeAdmin,
+      }) +
+      "</a>" +
+      "</div>" +
+
+      // Expanded inline composer (hidden until user clicks/taps the prompt box)
+      '<div class="fb-composer-expanded hidden" id="' + uidPrefix + '_expanded">' +
+      '<div class="fb-composer-exp-head">' +
+      '<div class="fb-composer-exp-author">' +
+      U.renderAvatarHtml({
+        name: ctx.profile.name,
+        avatarUrl: ctx.profile.avatarUrl,
+        avatarColor: ctx.profile.avatarColor,
+        size: "sm",
+        isAdmin: isMeAdmin,
+      }) +
+      '<div class="fb-composer-exp-meta"><strong>' + U.escapeHtml(ctx.profile.name) + '</strong>' +
+      '<span>@' + U.escapeHtml(ctx.profile.username) + "</span></div></div>" +
+      '<button type="button" class="icon-btn" id="' + uidPrefix + '_collapse" aria-label="Close composer">' + U.ICONS.close + "</button>" +
+      "</div>" +
+      '<div class="composer-mode-tabs" id="' + uidPrefix + '_tabs" role="tablist">' +
+      '<button type="button" class="composer-mode-tab active" data-cmode="text" role="tab">' + U.ICONS.edit + "<span>Text Post</span></button>" +
+      '<button type="button" class="composer-mode-tab" data-cmode="embed" role="tab">' + U.ICONS.video + "<span>Embed Video / Post</span></button>" +
+      "</div>" +
+      '<textarea id="' + uidPrefix + '_input" class="composer-textarea" maxlength="' + U.LIMITS.POST_TEXT_MAX + '" placeholder="What\'s on your mind, ' + U.escapeHtml(firstName) + '? Type @ to mention or #hashtag..."></textarea>' +
+      '<div id="' + uidPrefix + '_embed_box" class="composer-embed-box hidden">' +
+      '<label class="form-label" for="' + uidPrefix + '_embed_input" style="font-size:12.5px;margin-bottom:4px;">Paste Facebook Post/Video or YouTube embed &lt;iframe&gt; code or link</label>' +
+      '<textarea id="' + uidPrefix + '_embed_input" class="form-textarea font-mono" rows="2" placeholder=\'<iframe src="https://www.facebook.com/plugins/video.php?..."></iframe> or link\'></textarea>' +
+      '<div id="' + uidPrefix + '_embed_status" class="composer-embed-status text-muted">Supports Facebook Posts, Videos &amp; Reels, YouTube &amp; Vimeo.</div>' +
+      '<div id="' + uidPrefix + '_aspect_bar" class="embed-aspect-bar hidden">' +
+      '<span class="embed-aspect-label">Video Size:</span>' +
+      '<button type="button" class="embed-aspect-btn active" data-aspect-pick="auto">Auto</button>' +
+      '<button type="button" class="embed-aspect-btn" data-aspect-pick="16:9">Horizontal (16:9)</button>' +
+      '<button type="button" class="embed-aspect-btn" data-aspect-pick="1:1">Square (1:1)</button>' +
+      '<button type="button" class="embed-aspect-btn" data-aspect-pick="9:16">Vertical (9:16)</button>' +
+      "</div>" +
+      '<div id="' + uidPrefix + '_embed_preview"></div>' +
+      "</div>" +
+      '<div id="' + uidPrefix + '_live_preview"></div>' +
+      '<div class="composer-footer fb-composer-footer">' +
+      '<span class="composer-counter" id="' + uidPrefix + '_counter">0 / ' + U.LIMITS.POST_TEXT_MAX + "</span>" +
+      '<div class="fb-composer-submit-group">' +
+      '<button type="button" id="' + uidPrefix + '_cancel" class="btn btn-secondary btn-sm">Cancel</button>' +
+      '<button type="button" id="' + uidPrefix + '_submit" class="btn btn-primary btn-sm" disabled>' + U.ICONS.send + "<span>Post</span></button>" +
+      "</div></div></div></section>";
+
+    var collapsedBar = document.getElementById(uidPrefix + "_collapsed");
+    var triggerBtn = document.getElementById(uidPrefix + "_trigger");
+    var expandedBox = document.getElementById(uidPrefix + "_expanded");
+    var collapseBtn = document.getElementById(uidPrefix + "_collapse");
+    var cancelBtn = document.getElementById(uidPrefix + "_cancel");
+    var tabsEl = document.getElementById(uidPrefix + "_tabs");
+    var inputEl = document.getElementById(uidPrefix + "_input");
+    var embedBox = document.getElementById(uidPrefix + "_embed_box");
+    var embedInput = document.getElementById(uidPrefix + "_embed_input");
+    var embedStatus = document.getElementById(uidPrefix + "_embed_status");
+    var embedAspectBar = document.getElementById(uidPrefix + "_aspect_bar");
+    var embedPreviewEl = document.getElementById(uidPrefix + "_embed_preview");
+    var livePreviewEl = document.getElementById(uidPrefix + "_live_preview");
+    var counterEl = document.getElementById(uidPrefix + "_counter");
+    var submitBtn = document.getElementById(uidPrefix + "_submit");
+
+    var cleanupMention = U.attachMentionAutocomplete(inputEl, ctx.user.uid);
+    var lastPreviewUrl = "";
+    var previewTimer = null;
+
+    function expandComposer(focusEmbed) {
+      isExpanded = true;
+      collapsedBar.classList.add("hidden");
+      expandedBox.classList.remove("hidden");
+      if (focusEmbed) {
+        setComposerMode("embed");
+      } else {
+        inputEl.focus();
+      }
+    }
+
+    function collapseComposer() {
+      isExpanded = false;
+      expandedBox.classList.add("hidden");
+      collapsedBar.classList.remove("hidden");
+    }
+
+    function updateSubmitState() {
+      var hasText = inputEl.value.trim().length > 0;
+      if (composerMode === "embed") {
+        submitBtn.disabled = !Boolean(U.parseSafeEmbedInput(embedInput.value));
+      } else {
+        submitBtn.disabled = !hasText;
+      }
+    }
+
+    function updateComposerPreview() {
+      if (composerMode === "embed") {
+        livePreviewEl.innerHTML = "";
+        return;
+      }
+      var urls = U.extractUrls(inputEl.value);
+      var firstUrl = urls[0] || "";
+      if (firstUrl === lastPreviewUrl) return;
+      lastPreviewUrl = firstUrl;
+      if (!firstUrl) {
+        livePreviewEl.innerHTML = "";
+        return;
+      }
+      livePreviewEl.innerHTML = U.renderSmartPreviewHtml(firstUrl);
+      U.hydrateLinkPreviews(livePreviewEl);
+    }
+
+    function setComposerMode(mode) {
+      composerMode = mode === "embed" ? "embed" : "text";
+      tabsEl.querySelectorAll(".composer-mode-tab").forEach(function (t) {
+        t.classList.toggle("active", t.dataset.cmode === composerMode);
+      });
+      embedBox.classList.toggle("hidden", composerMode !== "embed");
+      inputEl.placeholder =
+        composerMode === "embed"
+          ? "Add an optional caption, @mentions, or #hashtags..."
+          : "What's on your mind, " + firstName + "? Type @ to mention or #hashtag...";
+      if (composerMode === "embed") {
+        livePreviewEl.innerHTML = "";
+        embedInput.focus();
+      } else {
+        updateComposerPreview();
+      }
+      updateSubmitState();
+    }
+
+    function updateEmbedPreview() {
+      var raw = embedInput.value.trim();
+      if (!raw) {
+        embedStatus.textContent = "Supports Facebook Posts, Videos & Reels, YouTube & Vimeo.";
+        embedStatus.className = "composer-embed-status text-muted";
+        if (embedAspectBar) embedAspectBar.classList.add("hidden");
+        embedPreviewEl.innerHTML = "";
+        updateSubmitState();
+        return;
+      }
+      var parsed = U.parseSafeEmbedInput(raw);
+      if (parsed) {
+        var effectiveAspect =
+          parsed.kind !== "post" && selectedEmbedAspect !== "auto"
+            ? selectedEmbedAspect
+            : parsed.aspect;
+        var previewPayload = Object.assign({}, parsed, { aspect: effectiveAspect });
+        var detectedName =
+          parsed.provider === "facebook" && parsed.kind !== "post"
+            ? effectiveAspect === "9:16"
+              ? "Facebook Reel (Vertical)"
+              : "Facebook Video (" + (parsed.width && parsed.height && selectedEmbedAspect === "auto" ? parsed.width + "×" + parsed.height : effectiveAspect) + ")"
+            : parsed.label;
+        embedStatus.textContent = "Valid " + detectedName + " detected — ready to embed natively!";
+        embedStatus.className = "composer-embed-status ok";
+        if (embedAspectBar) {
+          embedAspectBar.classList.toggle("hidden", parsed.kind === "post");
+        }
+        embedPreviewEl.innerHTML = U.renderEmbedPlayerHtml(previewPayload);
+        if (U.fitFacebookPostEmbeds) U.fitFacebookPostEmbeds(embedPreviewEl);
+      } else {
+        embedStatus.textContent = "Unrecognized embed. Paste a Facebook Post/Video or YouTube/Vimeo <iframe> code or link.";
+        embedStatus.className = "composer-embed-status err";
+        if (embedAspectBar) embedAspectBar.classList.add("hidden");
+        embedPreviewEl.innerHTML = "";
+      }
+      updateSubmitState();
+    }
+
+    triggerBtn.addEventListener("click", function () {
+      expandComposer(false);
+    });
+    collapseBtn.addEventListener("click", collapseComposer);
+    cancelBtn.addEventListener("click", collapseComposer);
+
+    tabsEl.addEventListener("click", function (e) {
+      var btn = e.target.closest("[data-cmode]");
+      if (!btn) return;
+      setComposerMode(btn.dataset.cmode);
+    });
+
+    if (embedAspectBar) {
+      embedAspectBar.addEventListener("click", function (e) {
+        var btn = e.target.closest("[data-aspect-pick]");
+        if (!btn) return;
+        selectedEmbedAspect = btn.dataset.aspectPick || "auto";
+        embedAspectBar.querySelectorAll("[data-aspect-pick]").forEach(function (b) {
+          b.classList.toggle("active", b === btn);
+        });
+        updateEmbedPreview();
+      });
+    }
+
+    embedInput.addEventListener("input", function () {
+      selectedEmbedAspect = "auto";
+      if (embedAspectBar) {
+        embedAspectBar.querySelectorAll("[data-aspect-pick]").forEach(function (b) {
+          b.classList.toggle("active", b.dataset.aspectPick === "auto");
+        });
+      }
+      updateEmbedPreview();
+    });
+
+    inputEl.addEventListener("input", function () {
+      var len = inputEl.value.length;
+      counterEl.textContent = len + " / " + U.LIMITS.POST_TEXT_MAX;
+      counterEl.classList.toggle("near-limit", len > U.LIMITS.POST_TEXT_MAX - 120);
+      updateSubmitState();
+      clearTimeout(previewTimer);
+      previewTimer = setTimeout(updateComposerPreview, 350);
+    });
+
+    submitBtn.addEventListener("click", async function () {
+      submitBtn.disabled = true;
+      try {
+        await createPost(ctx.profile, inputEl.value, {
+          postType: composerMode,
+          embedRaw: composerMode === "embed" ? embedInput.value : "",
+          embedAspectOverride: composerMode === "embed" && selectedEmbedAspect !== "auto" ? selectedEmbedAspect : "",
+        });
+        inputEl.value = "";
+        embedInput.value = "";
+        selectedEmbedAspect = "auto";
+        if (embedAspectBar) {
+          embedAspectBar.classList.add("hidden");
+          embedAspectBar.querySelectorAll("[data-aspect-pick]").forEach(function (b) {
+            b.classList.toggle("active", b.dataset.aspectPick === "auto");
+          });
+        }
+        embedPreviewEl.innerHTML = "";
+        embedStatus.textContent = "Supports Facebook Posts, Videos & Reels, YouTube & Vimeo.";
+        embedStatus.className = "composer-embed-status text-muted";
+        lastPreviewUrl = "";
+        livePreviewEl.innerHTML = "";
+        counterEl.textContent = "0 / " + U.LIMITS.POST_TEXT_MAX;
+        setComposerMode("text");
+        collapseComposer();
+        U.showToast("Post published!", "success");
+        if (typeof opts.onPublished === "function") opts.onPublished();
+      } catch (err) {
+        U.showToast(U.getFriendlyErrorMessage(err), "error");
+        updateSubmitState();
+      }
+    });
+
+    return {
+      expandWithText: function (text) {
+        expandComposer(false);
+        setComposerMode("text");
+        inputEl.value = text || "";
+        inputEl.dispatchEvent(new Event("input"));
+        inputEl.focus();
+      },
+      isExpanded: function () { return isExpanded; },
+      cleanup: function () {
+        clearTimeout(previewTimer);
+        cleanupMention();
+      },
+    };
+  }
+
+  // ============================================================================
   // HOME FEED VIEW CONTROLLER (#feed)
   // ============================================================================
   function mountFeedView(ctx, params) {
     var pageLimit = 30;
-    var feedFilter = "all";
-    var composerMode = "text"; // 'text' | 'embed'
-    var taggedUsersMap = new Map();
+    var feedFilter = "for_you";
     var allPosts = [];
     var activeAnnouncements = [];
     var socialState = {
@@ -1352,85 +1772,31 @@
     var unsubFeed = null;
     var highlightPostId = params ? params.get("post") || "" : "";
 
-    var isMeAdmin = U.isOfficialAdminUser(ctx.profile) || ctx.isAdmin;
-
     ctx.mainEl.innerHTML =
+      '<div id="feed-composer-slot"></div>' +
       '<div id="feed-announcements-slot" class="feed-announcements-slot"></div>' +
-      '<section class="card composer-card">' +
-      '<div class="composer-mode-tabs" id="composer-mode-tabs" role="tablist">' +
-      '<button type="button" class="composer-mode-tab active" data-cmode="text" role="tab">' + U.ICONS.edit + "<span>Text Post</span></button>" +
-      '<button type="button" class="composer-mode-tab" data-cmode="embed" role="tab">' + U.ICONS.video + "<span>Embed Video / Post</span></button>" +
-      "</div>" +
-      '<div class="composer-top">' +
-      U.renderAvatarHtml({
-        name: ctx.profile.name,
-        avatarUrl: ctx.profile.avatarUrl,
-        avatarColor: ctx.profile.avatarColor,
-        size: "md",
-        isAdmin: isMeAdmin,
-      }) +
-      '<div class="composer-fields">' +
-      '<textarea id="post-composer-input" class="composer-textarea" maxlength="' + U.LIMITS.POST_TEXT_MAX + '" placeholder="What\'s on your mind, ' + U.escapeHtml(ctx.profile.name.split(" ")[0]) + '? Use @mentions, #hashtags, or paste any link..."></textarea>' +
-      '<div id="composer-embed-box" class="composer-embed-box hidden">' +
-      '<label class="form-label" for="post-embed-input" style="font-size:12.5px;margin-bottom:4px;">Paste Facebook Post/Video or YouTube embed &lt;iframe&gt; code or link</label>' +
-      '<textarea id="post-embed-input" class="form-textarea font-mono" rows="2" placeholder=\'<iframe src="https://www.facebook.com/plugins/video.php?..."></iframe> or Facebook post/video/reel or YouTube link\'></textarea>' +
-      '<div id="composer-embed-status" class="composer-embed-status text-muted">Supports Facebook Posts (photos/text), Facebook Videos &amp; Reels, YouTube, Shorts &amp; Vimeo.</div>' +
-      '<div id="composer-embed-aspect-bar" class="embed-aspect-bar hidden">' +
-      '<span class="embed-aspect-label">Video Size:</span>' +
-      '<button type="button" class="embed-aspect-btn active" data-aspect-pick="auto">Auto</button>' +
-      '<button type="button" class="embed-aspect-btn" data-aspect-pick="16:9">Horizontal (16:9)</button>' +
-      '<button type="button" class="embed-aspect-btn" data-aspect-pick="1:1">Square (1:1)</button>' +
-      '<button type="button" class="embed-aspect-btn" data-aspect-pick="9:16">Vertical (9:16)</button>' +
-      "</div>" +
-      '<div id="composer-embed-preview"></div>' +
-      "</div>" +
-      '<div id="composer-tagged-chips" class="composer-tagged-chips hidden"></div>' +
-      "</div></div>" +
-      '<div id="composer-live-preview"></div>' +
-      '<div class="composer-footer">' +
-      '<div class="composer-tools">' +
-      '<button type="button" class="composer-tool-btn" id="btn-composer-tag" title="Tag people in this post">' + U.ICONS.tag + "<span>Tag People</span></button>" +
-      '<button type="button" class="composer-tool-btn" id="btn-composer-hash" title="Insert #hashtag">' + U.ICONS.hash + "<span>Hashtag</span></button>" +
-      '<button type="button" class="composer-tool-btn" id="btn-composer-embed-shortcut" title="Embed a Facebook post/video or YouTube video">' + U.ICONS.code + "<span>Embed</span></button>" +
-      '<span class="composer-counter" id="composer-counter">0 / ' + U.LIMITS.POST_TEXT_MAX + "</span>" +
-      "</div>" +
-      '<button type="button" id="post-submit-btn" class="btn btn-primary" disabled>' + U.ICONS.send + "<span>Post</span></button>" +
-      "</div></section>" +
-      '<div class="feed-filter-bar"><h2 style="font-size:16px;font-weight:800;">Community Feed</h2>' +
+      '<div class="feed-filter-bar">' +
       '<div class="filter-group" id="feed-filter-group">' +
-      '<button type="button" class="filter-btn active" data-filter="all">Everyone</button>' +
+      '<button type="button" class="filter-btn active" data-filter="for_you">For You</button>' +
       '<button type="button" class="filter-btn" data-filter="network">Friends &amp; Following</button>' +
       "</div></div>" +
-      '<div id="feed-posts-container" style="display:flex;flex-direction:column;gap:14px;">' +
+      '<div id="feed-posts-container" class="feed-posts-stack">' +
       '<div class="card empty-state"><div class="spinner"></div><p>Loading community feed...</p></div></div>' +
-      '<div id="feed-load-more-wrap" class="hidden" style="text-align:center;margin-top:16px;">' +
+      '<div id="feed-load-more-wrap" class="hidden" style="text-align:center;margin-top:14px;">' +
       '<button type="button" id="feed-load-more-btn" class="btn btn-secondary">Load more posts</button></div>';
 
+    var composerSlot = document.getElementById("feed-composer-slot");
     var announcementsSlot = document.getElementById("feed-announcements-slot");
-    var inputEl = document.getElementById("post-composer-input");
-    var embedBox = document.getElementById("composer-embed-box");
-    var embedInput = document.getElementById("post-embed-input");
-    var embedStatus = document.getElementById("composer-embed-status");
-    var embedAspectBar = document.getElementById("composer-embed-aspect-bar");
-    var embedPreviewEl = document.getElementById("composer-embed-preview");
-    var selectedEmbedAspect = "auto";
-    var taggedChipsEl = document.getElementById("composer-tagged-chips");
-    var counterEl = document.getElementById("composer-counter");
-    var submitBtn = document.getElementById("post-submit-btn");
-    var livePreviewEl = document.getElementById("composer-live-preview");
     var postsContainer = document.getElementById("feed-posts-container");
 
-    var cleanupComposerMention = U.attachMentionAutocomplete(inputEl, ctx.user.uid);
+    var composerController = mountCompactComposer(composerSlot, ctx);
 
     var postManager = createPostListManager({
       container: postsContainer,
       ctx: ctx,
       highlightPostId: highlightPostId,
       onQuotePost: function (quoteText) {
-        setComposerMode("text");
-        inputEl.value = quoteText;
-        inputEl.dispatchEvent(new Event("input"));
-        inputEl.focus();
+        composerController.expandWithText(quoteText);
         window.scrollTo({ top: 0, behavior: "smooth" });
       },
     });
@@ -1512,260 +1878,6 @@
       }
     });
 
-    // ---- Dual-Mode Composer Logic ----
-    function updateSubmitState() {
-      var hasText = inputEl.value.trim().length > 0;
-      if (composerMode === "embed") {
-        var validEmbed = Boolean(U.parseSafeEmbedInput(embedInput.value));
-        submitBtn.disabled = !validEmbed;
-      } else {
-        submitBtn.disabled = !hasText;
-      }
-    }
-
-    function setComposerMode(mode) {
-      composerMode = mode === "embed" ? "embed" : "text";
-      document.querySelectorAll("#composer-mode-tabs .composer-mode-tab").forEach(function (t) {
-        t.classList.toggle("active", t.dataset.cmode === composerMode);
-      });
-      embedBox.classList.toggle("hidden", composerMode !== "embed");
-      inputEl.placeholder =
-        composerMode === "embed"
-          ? "Add an optional caption, @mentions, or #hashtags for this video..."
-          : "What's on your mind, " + ctx.profile.name.split(" ")[0] + "? Use @mentions, #hashtags, or paste any link...";
-      if (composerMode === "embed") {
-        livePreviewEl.innerHTML = "";
-        embedInput.focus();
-      } else {
-        updateComposerPreview();
-      }
-      updateSubmitState();
-    }
-
-    function renderTaggedChips() {
-      if (taggedUsersMap.size === 0) {
-        taggedChipsEl.classList.add("hidden");
-        taggedChipsEl.innerHTML = "";
-        return;
-      }
-      taggedChipsEl.classList.remove("hidden");
-      var html = '<span class="tagged-chips-label">With:</span>';
-      taggedUsersMap.forEach(function (u) {
-        html +=
-          '<span class="member-chip">@' + U.escapeHtml(u.username) +
-          '<button type="button" data-untag-uid="' + U.escapeHtml(u.uid) + '" aria-label="Remove tag">&times;</button></span>';
-      });
-      taggedChipsEl.innerHTML = html;
-    }
-
-    taggedChipsEl.addEventListener("click", function (e) {
-      var rm = e.target.closest("[data-untag-uid]");
-      if (!rm) return;
-      taggedUsersMap.delete(rm.dataset.untagUid);
-      renderTaggedChips();
-    });
-
-    function openTagPeopleModal() {
-      var allCandidates = [];
-      U.openModal(
-        "Tag People in Post",
-        '<p class="text-muted" style="font-size:13px;margin-bottom:10px;">Tagged friends will be highlighted on your post and receive an instant notification.</p>' +
-          '<div id="tag-selected-chips" class="selected-chips" style="margin-bottom:10px;"></div>' +
-          '<input id="tag-user-search" class="form-input" type="search" placeholder="Search people by name or @username..." />' +
-          '<div id="tag-user-list" style="max-height:240px;overflow-y:auto;border:1px solid var(--border);border-radius:var(--radius-md);padding:6px;margin-top:8px;">' +
-          '<p class="text-muted" style="font-size:13px;padding:8px;">Loading people...</p></div>' +
-          '<div class="modal-actions" style="margin-top:14px;"><button type="button" id="tag-done-btn" class="btn btn-primary">Done</button></div>',
-        function (body, close) {
-          var chipsBox = body.querySelector("#tag-selected-chips");
-          var searchEl = body.querySelector("#tag-user-search");
-          var listEl = body.querySelector("#tag-user-list");
-
-          function drawModalChips() {
-            if (taggedUsersMap.size === 0) {
-              chipsBox.innerHTML = '<span class="text-muted" style="font-size:12px;">No one tagged yet (up to 10)</span>';
-              return;
-            }
-            var h = "";
-            taggedUsersMap.forEach(function (u) {
-              h += '<span class="member-chip">' + U.escapeHtml(u.name) +
-                '<button type="button" data-m-untag="' + U.escapeHtml(u.uid) + '">&times;</button></span>';
-            });
-            chipsBox.innerHTML = h;
-          }
-
-          function drawList(users) {
-            var clean = (users || []).filter(function (u) {
-              return u.uid !== ctx.user.uid && !(HMM.blocks && HMM.blocks.isEitherBlocked(u.uid));
-            });
-            if (clean.length === 0) {
-              listEl.innerHTML = '<p class="text-muted" style="font-size:13px;padding:8px;">No matching users.</p>';
-              return;
-            }
-            listEl.innerHTML = clean
-              .map(function (u) {
-                var checked = taggedUsersMap.has(u.uid);
-                return (
-                  '<label class="group-member-pick">' +
-                  '<input type="checkbox" data-tag-pick="' + U.escapeHtml(u.uid) + '" ' + (checked ? "checked" : "") + " />" +
-                  U.renderAvatarHtml({ name: u.name, avatarUrl: u.avatarUrl, avatarColor: u.avatarColor, size: "xs", isAdmin: U.isOfficialAdminUser(u) }) +
-                  '<span class="group-member-pick-info"><strong>' + U.escapeHtml(u.name) + '</strong><span class="text-muted">@' + U.escapeHtml(u.username) + "</span></span>" +
-                  "</label>"
-                );
-              })
-              .join("");
-          }
-
-          listEl.addEventListener("change", function (e) {
-            var cb = e.target.closest("[data-tag-pick]");
-            if (!cb) return;
-            var uid = cb.dataset.tagPick;
-            var found = allCandidates.find(function (u) { return u.uid === uid; });
-            if (cb.checked && found) {
-              if (taggedUsersMap.size >= 10) {
-                cb.checked = false;
-                U.showToast("You can tag up to 10 people per post.", "error");
-                return;
-              }
-              taggedUsersMap.set(uid, found);
-            } else {
-              taggedUsersMap.delete(uid);
-            }
-            drawModalChips();
-            renderTaggedChips();
-          });
-
-          chipsBox.addEventListener("click", function (e) {
-            var rm = e.target.closest("[data-m-untag]");
-            if (!rm) return;
-            taggedUsersMap.delete(rm.dataset.mUntag);
-            drawModalChips();
-            drawList(allCandidates);
-            renderTaggedChips();
-          });
-
-          HMM.authService.getSuggestedUsers(ctx.user.uid, 30).then(function (list) {
-            allCandidates = list;
-            drawList(list);
-          });
-
-          var t = null;
-          searchEl.addEventListener("input", function () {
-            clearTimeout(t);
-            t = setTimeout(async function () {
-              var q = searchEl.value.trim();
-              var list = q
-                ? await HMM.authService.searchUsers(q, ctx.user.uid)
-                : await HMM.authService.getSuggestedUsers(ctx.user.uid, 30);
-              allCandidates = list;
-              drawList(list);
-            }, 220);
-          });
-
-          body.querySelector("#tag-done-btn").addEventListener("click", close);
-          drawModalChips();
-        }
-      );
-    }
-
-    document.getElementById("composer-mode-tabs").addEventListener("click", function (e) {
-      var btn = e.target.closest("[data-cmode]");
-      if (!btn) return;
-      setComposerMode(btn.dataset.cmode);
-    });
-
-    document.getElementById("btn-composer-tag").addEventListener("click", openTagPeopleModal);
-    document.getElementById("btn-composer-embed-shortcut").addEventListener("click", function () {
-      setComposerMode(composerMode === "embed" ? "text" : "embed");
-    });
-    document.getElementById("btn-composer-hash").addEventListener("click", function () {
-      var val = inputEl.value;
-      var prefix = val && !/\s$/.test(val) ? " #" : "#";
-      inputEl.value = val + prefix;
-      inputEl.focus();
-      inputEl.dispatchEvent(new Event("input"));
-    });
-
-    var lastPreviewUrl = "";
-    var previewTimer = null;
-
-    function updateComposerPreview() {
-      if (composerMode === "embed") {
-        livePreviewEl.innerHTML = "";
-        return;
-      }
-      var urls = U.extractUrls(inputEl.value);
-      var firstUrl = urls[0] || "";
-      if (firstUrl === lastPreviewUrl) return;
-      lastPreviewUrl = firstUrl;
-      if (!firstUrl) {
-        livePreviewEl.innerHTML = "";
-        return;
-      }
-      livePreviewEl.innerHTML = U.renderSmartPreviewHtml(firstUrl);
-      U.hydrateLinkPreviews(livePreviewEl);
-    }
-
-    function updateEmbedPreview() {
-      var raw = embedInput.value.trim();
-      if (!raw) {
-        embedStatus.textContent = "Supports Facebook Posts (photos/text), Facebook Videos & Reels, YouTube, Shorts & Vimeo.";
-        embedStatus.className = "composer-embed-status text-muted";
-        if (embedAspectBar) embedAspectBar.classList.add("hidden");
-        embedPreviewEl.innerHTML = "";
-        updateSubmitState();
-        return;
-      }
-      var parsed = U.parseSafeEmbedInput(raw);
-      if (parsed) {
-        var effectiveAspect =
-          parsed.kind !== "post" && selectedEmbedAspect !== "auto"
-            ? selectedEmbedAspect
-            : parsed.aspect;
-        var previewPayload = Object.assign({}, parsed, { aspect: effectiveAspect });
-        var detectedName =
-          parsed.provider === "facebook" && parsed.kind !== "post"
-            ? effectiveAspect === "9:16"
-              ? "Facebook Reel (Vertical)"
-              : "Facebook Video (" + (parsed.width && parsed.height && selectedEmbedAspect === "auto" ? parsed.width + "×" + parsed.height : effectiveAspect) + ")"
-            : parsed.label;
-        embedStatus.textContent = "Valid " + detectedName + " detected — ready to embed natively!";
-        embedStatus.className = "composer-embed-status ok";
-        if (embedAspectBar) {
-          embedAspectBar.classList.toggle("hidden", parsed.kind === "post");
-        }
-        embedPreviewEl.innerHTML = U.renderEmbedPlayerHtml(previewPayload);
-        if (U.fitFacebookPostEmbeds) U.fitFacebookPostEmbeds(embedPreviewEl);
-      } else {
-        embedStatus.textContent = "Unrecognized embed. Paste a Facebook Post/Video or YouTube/Vimeo <iframe> code or link.";
-        embedStatus.className = "composer-embed-status err";
-        if (embedAspectBar) embedAspectBar.classList.add("hidden");
-        embedPreviewEl.innerHTML = "";
-      }
-      updateSubmitState();
-    }
-
-    if (embedAspectBar) {
-      embedAspectBar.addEventListener("click", function (e) {
-        var btn = e.target.closest("[data-aspect-pick]");
-        if (!btn) return;
-        selectedEmbedAspect = btn.dataset.aspectPick || "auto";
-        embedAspectBar.querySelectorAll("[data-aspect-pick]").forEach(function (b) {
-          b.classList.toggle("active", b === btn);
-        });
-        updateEmbedPreview();
-      });
-    }
-
-    embedInput.addEventListener("input", function () {
-      selectedEmbedAspect = "auto";
-      if (embedAspectBar) {
-        embedAspectBar.querySelectorAll("[data-aspect-pick]").forEach(function (b) {
-          b.classList.toggle("active", b.dataset.aspectPick === "auto");
-        });
-      }
-      updateEmbedPreview();
-    });
-
     function renderFiltered() {
       var list =
         feedFilter === "network"
@@ -1776,7 +1888,7 @@
                 socialState.followingUids.has(p.authorId)
               );
             })
-          : allPosts;
+          : rankSmartFeedPosts(allPosts, ctx.user.uid, socialState);
 
       postManager.render(
         list,
@@ -1791,49 +1903,6 @@
         loadMoreWrap.classList.toggle("hidden", allPosts.length < pageLimit || pageLimit >= 100);
       }
     }
-
-    inputEl.addEventListener("input", function () {
-      var len = inputEl.value.length;
-      counterEl.textContent = len + " / " + U.LIMITS.POST_TEXT_MAX;
-      counterEl.classList.toggle("near-limit", len > U.LIMITS.POST_TEXT_MAX - 120);
-      updateSubmitState();
-      clearTimeout(previewTimer);
-      previewTimer = setTimeout(updateComposerPreview, 350);
-    });
-
-    submitBtn.addEventListener("click", async function () {
-      submitBtn.disabled = true;
-      try {
-        await createPost(ctx.profile, inputEl.value, {
-          postType: composerMode,
-          embedRaw: composerMode === "embed" ? embedInput.value : "",
-          embedAspectOverride: composerMode === "embed" && selectedEmbedAspect !== "auto" ? selectedEmbedAspect : "",
-          taggedUsers: Array.from(taggedUsersMap.values()),
-        });
-        inputEl.value = "";
-        embedInput.value = "";
-        selectedEmbedAspect = "auto";
-        if (embedAspectBar) {
-          embedAspectBar.classList.add("hidden");
-          embedAspectBar.querySelectorAll("[data-aspect-pick]").forEach(function (b) {
-            b.classList.toggle("active", b.dataset.aspectPick === "auto");
-          });
-        }
-        embedPreviewEl.innerHTML = "";
-        embedStatus.textContent = "Supports Facebook Posts (photos/text), Facebook Videos & Reels, YouTube, Shorts & Vimeo.";
-        embedStatus.className = "composer-embed-status text-muted";
-        taggedUsersMap.clear();
-        renderTaggedChips();
-        lastPreviewUrl = "";
-        livePreviewEl.innerHTML = "";
-        counterEl.textContent = "0 / " + U.LIMITS.POST_TEXT_MAX;
-        setComposerMode("text");
-        U.showToast("Post published!", "success");
-      } catch (err) {
-        U.showToast(U.getFriendlyErrorMessage(err), "error");
-        updateSubmitState();
-      }
-    });
 
     document.getElementById("feed-filter-group").addEventListener("click", function (e) {
       var btn = e.target.closest(".filter-btn");
@@ -1866,7 +1935,7 @@
 
     var unsubSocial = HMM.friends.subscribeToSocialState(ctx.user.uid, function (next) {
       socialState = next;
-      if (feedFilter === "network") renderFiltered();
+      renderFiltered();
     });
 
     var unsubAnnouncements = HMM.announcements.subscribeActive(function (list) {
@@ -1886,8 +1955,7 @@
     attachFeedSubscription();
 
     ctx.onCleanup(function () {
-      clearTimeout(previewTimer);
-      cleanupComposerMention();
+      composerController.cleanup();
       if (unsubFeed) unsubFeed();
       if (unsubReacts) unsubReacts();
       if (unsubSocial) unsubSocial();
@@ -1909,6 +1977,8 @@
     setPostReaction: setPostReaction,
     createPostListManager: createPostListManager,
     renderAnonymousPromoCard: renderAnonymousPromoCard,
+    mountCompactComposer: mountCompactComposer,
+    recordProfileVisit: recordProfileVisit,
     mountView: mountFeedView,
   };
 })(window.HMM = window.HMM || {});

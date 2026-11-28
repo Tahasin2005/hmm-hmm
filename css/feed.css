@@ -52,31 +52,140 @@
   font-weight: 600;
 }
 
-/* Feed Filter Bar */
-.feed-toolbar {
+/* Facebook-Style Compact Click-to-Expand Composer */
+.fb-composer-card {
+  padding: 12px 14px;
+  gap: 10px;
+}
+
+.fb-composer-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.fb-composer-trigger {
+  flex: 1;
+  min-width: 0;
+  height: 44px;
+  padding: 0 16px;
+  border-radius: var(--radius-full);
+  border: 1px solid var(--border);
+  background: var(--surface-subtle);
+  color: var(--text-muted);
+  text-align: left;
+  font-size: 14.5px;
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  cursor: pointer;
+  transition: background-color 0.15s ease, border-color 0.15s ease;
+}
+
+.fb-composer-trigger:hover {
+  background: var(--surface-hover);
+  border-color: var(--accent);
+  color: var(--text);
+}
+
+.fb-composer-avatar-link {
+  display: inline-flex;
+  flex-shrink: 0;
+  border-radius: 50%;
+}
+
+.fb-composer-expanded {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.fb-composer-exp-head {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 10px;
+}
+
+.fb-composer-exp-author {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  min-width: 0;
+}
+
+.fb-composer-exp-meta {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  line-height: 1.25;
+}
+
+.fb-composer-exp-meta strong {
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.fb-composer-exp-meta span {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.fb-composer-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding-top: 6px;
+  border-top: 1px solid var(--border);
+}
+
+.fb-composer-submit-group {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.feed-posts-stack {
+  display: flex;
+  flex-direction: column;
   gap: 12px;
 }
 
-.feed-filter-pills {
+/* Compact Feed Filter Bar */
+.feed-toolbar,
+.feed-filter-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.feed-filter-pills,
+.filter-group {
   display: inline-flex;
-  gap: 6px;
+  gap: 4px;
   background: var(--surface);
-  padding: 4px;
+  padding: 3px;
   border-radius: var(--radius-md);
   border: 1px solid var(--border);
 }
 
 .filter-btn {
-  padding: 6px 14px;
+  padding: 6px 13px;
   border-radius: var(--radius-sm);
   border: none;
   background: transparent;
   color: var(--text-muted);
   font-size: 13px;
   font-weight: 600;
+  cursor: pointer;
+  transition: background-color 0.15s ease, color 0.15s ease;
+}
+
+.filter-btn:hover {
+  color: var(--text);
 }
 
 .filter-btn.active {
@@ -484,7 +593,8 @@
   bottom: calc(100% + 4px);
 }
 
-.reaction-picker-wrap.dock-open .reaction-dock {
+.reaction-picker-wrap.dock-open .reaction-dock,
+.reaction-picker-wrap.open .reaction-dock {
   opacity: 1;
   visibility: visible;
   transform: translateY(0) scale(1);

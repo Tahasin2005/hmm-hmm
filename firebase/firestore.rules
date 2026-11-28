@@ -571,6 +571,16 @@ service cloud.firestore {
             && getAfter(/databases/$(database)/documents/usernames/$(incoming().username)).data.uid == uid
           ) ||
           (
+            isAdmin()
+            && isValidUserProfile(incoming(), uid)
+            && incoming().diff(existing()).affectedKeys().hasOnly([
+              'name', 'username', 'bio', 'avatarUrl', 'avatarColor',
+              'location', 'jobTitle', 'workplace', 'birthDate', 'socialLinks',
+              'coverPhotoUrl', 'visibility', 'friendRequestPref', 'updatedAt'
+            ])
+            && incoming().updatedAt == request.time
+          ) ||
+          (
             isOwner(uid)
             && isAdmin()
             && incoming().diff(existing()).affectedKeys().hasOnly(['coverPhotoUrl', 'updatedAt'])
@@ -578,13 +588,13 @@ service cloud.firestore {
             && incoming().updatedAt == request.time
           ) ||
           (
-            isOwner(uid)
+            (isOwner(uid) || isAdmin())
             && incoming().diff(existing()).affectedKeys().hasOnly(['avatarUrl', 'updatedAt'])
             && incoming().avatarUrl is string && incoming().avatarUrl.size() <= 160000
             && incoming().updatedAt == request.time
           ) ||
           (
-            isOwner(uid)
+            (isOwner(uid) || isAdmin())
             && incoming().diff(existing()).affectedKeys().hasOnly(['postsCount'])
             && incoming().postsCount is int && incoming().postsCount >= 0
             && (
@@ -593,7 +603,7 @@ service cloud.firestore {
             )
           ) ||
           (
-            isOwner(uid)
+            (isOwner(uid) || isAdmin())
             && incoming().diff(existing()).affectedKeys().hasOnly(['followingCount'])
             && incoming().followingCount is int && incoming().followingCount >= 0
             && (
@@ -602,17 +612,17 @@ service cloud.firestore {
             )
           ) ||
           (
-            !isOwner(uid)
+            (!isOwner(uid) || isAdmin())
             && incoming().diff(existing()).affectedKeys().hasOnly(['followersCount'])
             && incoming().followersCount is int && incoming().followersCount >= 0
             && (
               (
                 incoming().followersCount == (('followersCount' in existing() ? existing().followersCount : 0) + 1)
-                && existsAfter(/databases/$(database)/documents/follows/$(request.auth.uid + '_' + uid))
+                && (existsAfter(/databases/$(database)/documents/follows/$(request.auth.uid + '_' + uid)) || isAdmin())
               ) || (
                 ('followersCount' in existing() ? existing().followersCount : 0) > 0
                 && incoming().followersCount == existing().followersCount - 1
-                && !existsAfter(/databases/$(database)/documents/follows/$(request.auth.uid + '_' + uid))
+                && (!existsAfter(/databases/$(database)/documents/follows/$(request.auth.uid + '_' + uid)) || isAdmin())
               )
             )
           ) ||
@@ -624,6 +634,7 @@ service cloud.firestore {
                 incoming().friendsCount == (('friendsCount' in existing() ? existing().friendsCount : 0) + 1)
                 && (
                   isOwner(uid) ||
+                  isAdmin() ||
                   existsAfter(/databases/$(database)/documents/friendships/$(pairId(request.auth.uid, uid)))
                 )
               ) || (
@@ -631,6 +642,7 @@ service cloud.firestore {
                 && incoming().friendsCount == existing().friendsCount - 1
                 && (
                   isOwner(uid) ||
+                  isAdmin() ||
                   !existsAfter(/databases/$(database)/documents/friendships/$(pairId(request.auth.uid, uid)))
                 )
               )
@@ -674,7 +686,7 @@ service cloud.firestore {
       allow create: if isVerifiedUser()
         && isValidUsername(username)
         && isValidUsernameReservation(incoming(), username)
-        && incoming().uid == request.auth.uid
+        && (incoming().uid == request.auth.uid || isAdmin())
         && incoming().createdAt == request.time;
       allow update: if false;
       allow delete: if isVerifiedUser() && isValidUsername(username) && (existing().uid == request.auth.uid || isAdmin());
@@ -728,11 +740,11 @@ service cloud.firestore {
             && (
               (
                 incoming().likesCount == (('likesCount' in existing() ? existing().likesCount : 0) + 1)
-                && existsAfter(/databases/$(database)/documents/likes/$(postId + '_' + request.auth.uid))
+                && (existsAfter(/databases/$(database)/documents/likes/$(postId + '_' + request.auth.uid)) || isAdmin())
               ) || (
                 ('likesCount' in existing() ? existing().likesCount : 0) > 0
                 && incoming().likesCount == existing().likesCount - 1
-                && !existsAfter(/databases/$(database)/documents/likes/$(postId + '_' + request.auth.uid))
+                && (!existsAfter(/databases/$(database)/documents/likes/$(postId + '_' + request.auth.uid)) || isAdmin())
               )
             )
           ) ||
@@ -800,14 +812,14 @@ service cloud.firestore {
       allow create: if isVerifiedUser()
         && isValidId(likeId)
         && isValidLike(incoming(), likeId)
-        && incoming().userId == request.auth.uid
+        && (incoming().userId == request.auth.uid || isAdmin())
         && incoming().createdAt == request.time
         && exists(/databases/$(database)/documents/posts/$(incoming().postId));
 
       allow update: if isVerifiedUser()
         && isValidId(likeId)
         && isValidLike(incoming(), likeId)
-        && existing().userId == request.auth.uid
+        && (existing().userId == request.auth.uid || isAdmin())
         && incoming().userId == existing().userId
         && incoming().postId == existing().postId
         && incoming().likeId == existing().likeId
@@ -826,14 +838,14 @@ service cloud.firestore {
       allow create: if isVerifiedUser()
         && isValidId(reactionId)
         && isValidCommentReaction(incoming(), reactionId)
-        && incoming().userId == request.auth.uid
+        && (incoming().userId == request.auth.uid || isAdmin())
         && incoming().createdAt == request.time
         && exists(/databases/$(database)/documents/comments/$(incoming().commentId));
 
       allow update: if isVerifiedUser()
         && isValidId(reactionId)
         && isValidCommentReaction(incoming(), reactionId)
-        && existing().userId == request.auth.uid
+        && (existing().userId == request.auth.uid || isAdmin())
         && incoming().userId == existing().userId
         && incoming().commentId == existing().commentId
         && incoming().postId == existing().postId
@@ -863,11 +875,11 @@ service cloud.firestore {
       allow create: if isVerifiedUser()
         && isValidId(requestId)
         && isValidFriendRequest(incoming(), requestId)
-        && incoming().senderId == request.auth.uid
+        && (incoming().senderId == request.auth.uid || isAdmin())
         && incoming().status == 'pending'
         && incoming().createdAt == request.time
         && incoming().updatedAt == request.time
-        && isNotBlockedEither(request.auth.uid, incoming().receiverId)
+        && isNotBlockedEither(incoming().senderId, incoming().receiverId)
         && exists(/databases/$(database)/documents/users/$(incoming().receiverId));
 
       allow update: if isVerifiedUser()
@@ -920,7 +932,7 @@ service cloud.firestore {
       allow create: if isVerifiedUser()
         && isValidId(friendshipId)
         && isValidFriendship(incoming(), friendshipId)
-        && (incoming().user1Id == request.auth.uid || incoming().user2Id == request.auth.uid)
+        && (incoming().user1Id == request.auth.uid || incoming().user2Id == request.auth.uid || isAdmin())
         && incoming().createdAt == request.time
         && isNotBlockedEither(incoming().user1Id, incoming().user2Id)
         && exists(/databases/$(database)/documents/users/$(incoming().user1Id))
@@ -955,9 +967,9 @@ service cloud.firestore {
       allow create: if isVerifiedUser()
         && isValidId(followId)
         && isValidFollow(incoming(), followId)
-        && incoming().followerId == request.auth.uid
+        && (incoming().followerId == request.auth.uid || isAdmin())
         && incoming().createdAt == request.time
-        && isNotBlockedEither(request.auth.uid, incoming().followingId)
+        && isNotBlockedEither(incoming().followerId, incoming().followingId)
         && exists(/databases/$(database)/documents/users/$(incoming().followingId));
 
       allow update: if false;
@@ -987,10 +999,10 @@ service cloud.firestore {
       allow create: if isVerifiedUser()
         && isValidId(notificationId)
         && isValidNotification(incoming(), notificationId)
-        && incoming().senderId == request.auth.uid
+        && (incoming().senderId == request.auth.uid || isAdmin())
         && incoming().isRead == false
         && incoming().createdAt == request.time
-        && isNotBlockedEither(request.auth.uid, incoming().recipientId)
+        && isNotBlockedEither(incoming().senderId, incoming().recipientId)
         && exists(/databases/$(database)/documents/users/$(incoming().recipientId));
 
       allow update: if isVerifiedUser()

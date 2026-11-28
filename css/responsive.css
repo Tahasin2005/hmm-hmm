@@ -31,15 +31,68 @@
     padding: 24px 20px;
   }
 
+  /* Facebook-style static scrolling top bar on mobile */
+  .app-header {
+    position: static;
+    height: 56px;
+  }
+
+  /* 3-Zone Mobile Header: [Menu Left]  [Center Full Logo]  [Search + Bell Right] */
+  .header-inner {
+    display: grid;
+    grid-template-columns: 44px 1fr auto;
+    align-items: center;
+    padding: 0 10px;
+    gap: 6px;
+  }
+
+  .header-left-group {
+    justify-content: flex-start;
+  }
+
   .mobile-menu-btn {
     display: inline-flex;
+    width: 40px;
+    height: 40px;
+  }
+
+  .brand-link-desktop,
+  .header-search,
+  #hdr-user-link {
+    display: none !important;
+  }
+
+  .brand-link-mobile {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    justify-self: center;
+  }
+
+  .brand-link-mobile .brand-logo-full {
+    height: 30px;
+    max-width: 152px;
+  }
+
+  .mobile-search-toggle-btn {
+    display: inline-flex;
+  }
+
+  .header-actions {
+    gap: 6px;
+    justify-content: flex-end;
+  }
+
+  .header-actions .icon-btn {
+    width: 40px;
+    height: 40px;
   }
 
   .app-shell,
   .app-shell.wide-layout {
     grid-template-columns: 1fr;
-    padding: 14px 12px calc(var(--bottom-nav-h) + 26px + env(safe-area-inset-bottom, 0px));
-    gap: 14px;
+    padding: 10px 10px calc(var(--bottom-nav-h) + 22px + env(safe-area-inset-bottom, 0px));
+    gap: 10px;
   }
 
   .left-sidebar {
@@ -48,16 +101,6 @@
 
   .mobile-bottom-nav {
     display: grid;
-  }
-
-  .brand-tagline,
-  .header-user-name,
-  .header-user-admin-badge {
-    display: none;
-  }
-
-  .header-search {
-    max-width: none;
   }
 
   .people-grid {
@@ -72,10 +115,14 @@
     grid-template-columns: 1fr;
   }
 
+  .view-as-banner {
+    top: 6px;
+  }
+
   /* Mobile Chat Master/Detail Toggle */
   .chat-container {
     grid-template-columns: 1fr;
-    height: calc(100vh - var(--header-h) - var(--bottom-nav-h) - 28px);
+    height: calc(100vh - 56px - var(--bottom-nav-h) - 20px);
     min-height: 440px;
   }
 
@@ -145,10 +192,55 @@
   }
 }
 
-/* Small Tablets & Phones (<= 640px): keep header clean, search moves inside Mobile Drawer */
+/* Smartphones (<= 640px): Edge-to-Edge Facebook-style full-width feed (no side borders/margins) */
 @media (max-width: 640px) {
-  .header-search {
-    display: none;
+  .app-shell,
+  .app-shell.wide-layout {
+    padding: 0 0 calc(var(--bottom-nav-h) + 18px + env(safe-area-inset-bottom, 0px)) 0;
+    gap: 8px;
+  }
+
+  .main-column {
+    gap: 8px;
+  }
+
+  .feed-posts-stack {
+    gap: 8px;
+  }
+
+  .composer-card,
+  .fb-composer-card,
+  .post-card,
+  .announcement-card,
+  .feed-promo-card,
+  .profile-card {
+    border-radius: 0;
+    border-left: none;
+    border-right: none;
+    box-shadow: none;
+    padding: 12px 14px;
+  }
+
+  .profile-card {
+    padding: 0;
+  }
+
+  .feed-filter-bar {
+    padding: 4px 12px;
+  }
+
+  .page-header {
+    padding: 6px 12px 0;
+  }
+
+  .admin-console-card {
+    border-radius: 0;
+    border-left: none;
+    border-right: none;
+  }
+
+  .kpi-grid {
+    padding: 0 12px;
   }
 
   .profile-cover-emblem {
@@ -159,44 +251,36 @@
   }
 
   .reaction-dock {
-    max-width: calc(100vw - 32px);
+    max-width: calc(100vw - 20px);
     padding: 5px 6px;
+    gap: 2px;
   }
 
   .reaction-dock-item {
-    width: 34px;
-    height: 34px;
+    width: 38px;
+    height: 38px;
   }
 
   .reaction-emoji {
-    font-size: 20px;
+    font-size: 22px;
+  }
+
+  .impersonation-bar-inner {
+    padding: 8px 10px;
   }
 }
 
 /* Compact Smartphones (<= 480px) */
 @media (max-width: 480px) {
-  .header-inner {
-    padding: 0 10px;
-    gap: 8px;
-  }
-
-  .brand-name {
-    font-size: 16px;
-  }
-
-  .card {
-    padding: 14px;
-    border-radius: 14px;
-  }
-
   .page-title {
     font-size: 20px;
   }
 
   .post-action-btn {
-    font-size: 12.5px;
+    font-size: 13px;
     gap: 5px;
     padding: 0 6px;
+    height: 40px;
   }
 
   .profile-cover {
@@ -225,15 +309,6 @@
     align-items: flex-start;
   }
 
-  .composer-footer {
-    flex-direction: column;
-    align-items: stretch;
-  }
-
-  .composer-tools {
-    justify-content: flex-start;
-  }
-
   .composer-mode-tabs {
     width: 100%;
   }
@@ -244,7 +319,8 @@
   }
 
   .view-as-banner {
-    top: calc(var(--header-h) + 4px);
+    top: 4px;
+    border-radius: 0;
     padding: 10px 12px;
   }
 
@@ -256,5 +332,14 @@
   .chat-main-actions .btn {
     padding: 0 9px;
     font-size: 12px;
+  }
+
+  .reaction-dock-item {
+    width: 34px;
+    height: 34px;
+  }
+
+  .reaction-emoji {
+    font-size: 20px;
   }
 }

@@ -11,8 +11,11 @@
   var A = HMM.authService;
 
   var currentSession = null;
+  var actingAsProfile = null;
   var activeViewCleanup = [];
   var globalCleanups = [];
+  var sessionCleanups = [];
+  var IMPERSONATE_STORAGE_KEY = "hmm_admin_acting_uid";
 
   function runViewCleanup() {
     activeViewCleanup.forEach(function (fn) {
@@ -21,12 +24,51 @@
     activeViewCleanup = [];
   }
 
-  function runGlobalCleanup() {
+  function runSessionCleanup() {
     runViewCleanup();
+    sessionCleanups.forEach(function (fn) {
+      try { if (typeof fn === "function") fn(); } catch (e) {}
+    });
+    sessionCleanups = [];
+  }
+
+  function runGlobalCleanup() {
+    runSessionCleanup();
     globalCleanups.forEach(function (fn) {
       try { if (typeof fn === "function") fn(); } catch (e) {}
     });
     globalCleanups = [];
+  }
+
+  function getActiveSession() {
+    if (!currentSession) return null;
+    if (currentSession.isAdmin && actingAsProfile && actingAsProfile.uid !== currentSession.user.uid) {
+      var target = actingAsProfile;
+      return {
+        user: {
+          uid: target.uid,
+          displayName: target.name,
+          photoURL: target.avatarUrl || "",
+          email: "",
+          providerData: [],
+        },
+        profile: target,
+        isAdmin: false,
+        isRealAdmin: true,
+        isImpersonating: true,
+        realAdminUser: currentSession.user,
+        realAdminProfile: currentSession.profile,
+      };
+    }
+    return {
+      user: currentSession.user,
+      profile: currentSession.profile,
+      isAdmin: currentSession.isAdmin,
+      isRealAdmin: currentSession.isAdmin,
+      isImpersonating: false,
+      realAdminUser: currentSession.user,
+      realAdminProfile: currentSession.profile,
+    };
   }
 
   function attachPresence(uid) {
@@ -343,7 +385,6 @@
     var profile = session.profile;
     var isAdmin = session.isAdmin;
     var isOfficialAdmin = isAdmin || U.isOfficialAdminUser(profile);
-    var isDark = U.getCurrentTheme() === "dark";
     var cfg = HMM.siteConfig.get();
 
     var navItems = [
@@ -383,22 +424,38 @@
 
     var adminBadge = isOfficialAdmin ? U.renderAdminBadgeHtml("compact") : "";
 
+    var impersonationBarHtml = session.isImpersonating
+      ? '<div class="impersonation-bar" id="impersonation-bar">' +
+        '<div class="impersonation-bar-inner">' +
+        '<div class="impersonation-bar-info">' +
+        '<span class="impersonation-dot"></span>' +
+        '<span>Logged in as <strong>' + U.escapeHtml(profile.name) + '</strong> (@' + U.escapeHtml(profile.username) + ")</span>" +
+        "</div>" +
+        '<div class="impersonation-bar-actions">' +
+        '<a href="#profile" class="btn btn-secondary btn-sm">Profile</a>' +
+        '<a href="#messages" class="btn btn-secondary btn-sm">Messages</a>' +
+        '<button type="button" id="btn-exit-impersonation" class="btn btn-danger btn-sm">Exit to Admin</button>' +
+        "</div></div></div>"
+      : "";
+
     root.innerHTML =
+      impersonationBarHtml +
       '<header class="app-header"><div class="header-inner">' +
       '<div class="header-left-group">' +
-      '<button type="button" id="mobile-drawer-toggle" class="icon-btn mobile-menu-btn" aria-label="Open navigation menu" aria-expanded="false" aria-controls="mobile-nav-drawer">' +
+      '<button type="button" id="mobile-drawer-toggle" class="icon-btn mobile-menu-btn" aria-label="Open menu" aria-expanded="false" aria-controls="mobile-nav-drawer">' +
       U.ICONS.menu + "</button>" +
-      '<a href="#feed" class="brand-link">' +
-      '<img src="' + U.escapeHtml(cfg.logoUrl) + '" alt="' + U.escapeHtml(cfg.siteName) + '" class="brand-mark" data-site-logo />' +
-      '<span class="brand-text"><span class="brand-name" data-site-name>' + U.escapeHtml(cfg.siteName) + "</span>" +
-      '<span class="brand-tagline" data-site-tagline>' + U.escapeHtml(cfg.tagline) + "</span></span></a>" +
+      '<a href="#feed" class="brand-link brand-link-desktop" aria-label="' + U.escapeHtml(cfg.siteName) + ' Home">' +
+      '<img src="' + U.escapeHtml(cfg.logoUrl) + '" alt="' + U.escapeHtml(cfg.siteName) + '" class="brand-logo-full" data-site-logo />' +
+      "</a>" +
       "</div>" +
+      '<a href="#feed" class="brand-link brand-link-mobile" aria-label="' + U.escapeHtml(cfg.siteName) + ' Home">' +
+      '<img src="' + U.escapeHtml(cfg.logoUrl) + '" alt="' + U.escapeHtml(cfg.siteName) + '" class="brand-logo-full" data-site-logo />' +
+      "</a>" +
       '<form id="global-search-form" class="header-search" role="search">' +
       '<span class="header-search-icon">' + U.ICONS.search + "</span>" +
       '<input id="global-search-input" type="search" placeholder="Search people, @usernames, #hashtags..." aria-label="Search people and hashtags" /></form>' +
       '<div class="header-actions">' +
-      '<button type="button" id="theme-toggle-btn" class="icon-btn" title="Toggle dark mode" aria-label="Toggle dark mode">' + (isDark ? U.ICONS.sun : U.ICONS.moon) + "</button>" +
-      '<a href="#messages" class="icon-btn" data-hdr-nav="messages" title="Messages" aria-label="Messages">' + U.ICONS.message + '<span id="hdr-badge-messages" class="badge-dot hidden">0</span></a>' +
+      '<button type="button" id="hdr-mobile-search-btn" class="icon-btn mobile-search-toggle-btn" title="Search" aria-label="Search" aria-expanded="false">' + U.ICONS.search + "</button>" +
       '<a href="#notifications" class="icon-btn" data-hdr-nav="notifications" title="Notifications" aria-label="Notifications">' + U.ICONS.bell + '<span id="hdr-badge-notifs" class="badge-dot hidden">0</span></a>' +
       '<a href="#profile" class="header-user-btn" title="My profile" id="hdr-user-link">' +
       '<span id="hdr-profile-avatar">' + U.renderAvatarHtml({ name: profile.name, avatarUrl: profile.avatarUrl, avatarColor: profile.avatarColor, size: "xs", isAdmin: isOfficialAdmin }) + "</span>" +
@@ -407,26 +464,31 @@
       "</a>" +
       "</div></div></header>" +
 
-      // Mobile Navigation Drawer + Backdrop
+      // Expandable Mobile Search Bar (triggered from Top Bar Search icon)
+      '<div id="mobile-search-bar" class="mobile-search-bar hidden">' +
+      '<form id="mobile-search-form" class="mobile-search-form" role="search">' +
+      '<span class="header-search-icon">' + U.ICONS.search + "</span>" +
+      '<input id="mobile-search-input" type="search" placeholder="Search people, @usernames, #hashtags..." aria-label="Search" />' +
+      '<button type="button" id="mobile-search-close" class="icon-btn" aria-label="Close search">' + U.ICONS.close + "</button>" +
+      "</form></div>" +
+
+      // Mobile Navigation Drawer + Backdrop (no search input, no theme toggle)
       '<div id="mobile-drawer-backdrop" class="mobile-drawer-backdrop" aria-hidden="true"></div>' +
       '<aside id="mobile-nav-drawer" class="mobile-nav-drawer" aria-label="Navigation menu">' +
       '<div class="mobile-drawer-head">' +
-      '<a href="#feed" class="brand-link">' +
-      '<img src="' + U.escapeHtml(cfg.logoUrl) + '" alt="' + U.escapeHtml(cfg.siteName) + '" class="brand-mark" data-site-logo />' +
-      '<span class="brand-text"><span class="brand-name" data-site-name>' + U.escapeHtml(cfg.siteName) + "</span></span></a>" +
+      '<a href="#feed" class="brand-link" aria-label="' + U.escapeHtml(cfg.siteName) + ' Home">' +
+      '<img src="' + U.escapeHtml(cfg.logoUrl) + '" alt="' + U.escapeHtml(cfg.siteName) + '" class="brand-logo-full" data-site-logo /></a>' +
       '<button type="button" id="mobile-drawer-close" class="icon-btn" aria-label="Close navigation menu">' + U.ICONS.close + "</button>" +
       "</div>" +
-      '<form id="drawer-search-form" class="mobile-drawer-search" role="search">' +
-      '<span class="header-search-icon">' + U.ICONS.search + "</span>" +
-      '<input id="drawer-search-input" type="search" placeholder="Search people, @usernames, #hashtags..." aria-label="Search" /></form>' +
       '<a href="#profile" class="sidebar-profile-mini" id="drawer-profile-card">' +
       '<span id="drawer-profile-avatar">' + U.renderAvatarHtml({ name: profile.name, avatarUrl: profile.avatarUrl, avatarColor: profile.avatarColor, size: "md", online: true, isAdmin: isOfficialAdmin }) + "</span>" +
       '<div class="sidebar-profile-info"><strong class="name-with-badge"><span id="drawer-profile-name">' + U.escapeHtml(profile.name) + "</span>" + adminBadge + "</strong>" +
       '<span id="drawer-profile-handle">@' + U.escapeHtml(profile.username) + "</span></div></a>" +
       '<nav class="mobile-drawer-nav"><div class="nav-list">' + drawerNavHtml + "</div></nav>" +
       '<div class="mobile-drawer-footer">' +
-      '<button type="button" id="drawer-theme-btn" class="btn btn-secondary btn-block">' + (isDark ? U.ICONS.sun : U.ICONS.moon) +
-      '<span id="drawer-theme-label">' + (isDark ? "Switch to Light Mode" : "Switch to Dark Mode") + "</span></button>" +
+      (session.isImpersonating
+        ? '<button type="button" id="drawer-exit-impersonation" class="btn btn-danger btn-block">Exit to Admin Account</button>'
+        : "") +
       '<button type="button" id="drawer-logout-btn" class="sidebar-logout-btn">' + U.ICONS.logout + "<span>Sign out</span></button>" +
       "</div></aside>" +
 
@@ -438,6 +500,9 @@
       '<span id="sidebar-profile-handle">@' + U.escapeHtml(profile.username) + "</span></div></a>" +
       '<nav class="nav-card" aria-label="Main navigation"><div class="nav-list">' + leftNavHtml + "</div>" +
       '<hr style="border:none;border-top:1px solid var(--border);margin:8px 0;" />' +
+      (session.isImpersonating
+        ? '<button type="button" id="sidebar-exit-impersonation" class="btn btn-danger btn-sm btn-block" style="margin-bottom:8px;">Exit to Admin</button>'
+        : "") +
       '<button type="button" id="sidebar-logout-btn" class="sidebar-logout-btn">' + U.ICONS.logout + "<span>Sign out</span></button>" +
       "</nav></aside>" +
       '<main class="main-column" id="page-main"></main>' +
@@ -451,45 +516,65 @@
       '<a href="#profile" class="mobile-nav-item" data-mob-nav="profile">' + U.ICONS.user + "<span>Profile</span></a>" +
       "</nav>";
 
-    function syncThemeButtons(theme) {
-      var darkNow = theme === "dark";
-      var hdrBtn = document.getElementById("theme-toggle-btn");
-      if (hdrBtn) hdrBtn.innerHTML = darkNow ? U.ICONS.sun : U.ICONS.moon;
-      var drBtn = document.getElementById("drawer-theme-btn");
-      if (drBtn) {
-        drBtn.innerHTML =
-          (darkNow ? U.ICONS.sun : U.ICONS.moon) +
-          '<span id="drawer-theme-label">' + (darkNow ? "Switch to Light Mode" : "Switch to Dark Mode") + "</span>";
-      }
-    }
-
     document.getElementById("global-search-form").addEventListener("submit", function (e) {
       e.preventDefault();
       var q = (document.getElementById("global-search-input").value || "").trim();
       U.navigateTo("explore", q ? { q: q } : null);
     });
 
-    document.getElementById("drawer-search-form").addEventListener("submit", function (e) {
-      e.preventDefault();
-      var q = (document.getElementById("drawer-search-input").value || "").trim();
-      closeMobileDrawer();
-      U.navigateTo("explore", q ? { q: q } : null);
-    });
+    // Mobile Top Bar Search Toggle
+    var mobSearchBtn = document.getElementById("hdr-mobile-search-btn");
+    var mobSearchBar = document.getElementById("mobile-search-bar");
+    var mobSearchInput = document.getElementById("mobile-search-input");
+    var mobSearchClose = document.getElementById("mobile-search-close");
+    var mobSearchForm = document.getElementById("mobile-search-form");
 
-    document.getElementById("theme-toggle-btn").addEventListener("click", function () {
-      syncThemeButtons(U.toggleTheme());
-    });
+    function closeMobileSearch() {
+      if (mobSearchBar) mobSearchBar.classList.add("hidden");
+      if (mobSearchBtn) mobSearchBtn.setAttribute("aria-expanded", "false");
+    }
 
-    document.getElementById("drawer-theme-btn").addEventListener("click", function () {
-      syncThemeButtons(U.toggleTheme());
+    if (mobSearchBtn && mobSearchBar) {
+      mobSearchBtn.addEventListener("click", function () {
+        var opening = mobSearchBar.classList.contains("hidden");
+        mobSearchBar.classList.toggle("hidden", !opening);
+        mobSearchBtn.setAttribute("aria-expanded", opening ? "true" : "false");
+        if (opening && mobSearchInput) {
+          mobSearchInput.focus();
+        }
+      });
+    }
+    if (mobSearchClose) mobSearchClose.addEventListener("click", closeMobileSearch);
+    if (mobSearchForm) {
+      mobSearchForm.addEventListener("submit", function (e) {
+        e.preventDefault();
+        var q = (mobSearchInput.value || "").trim();
+        closeMobileSearch();
+        U.navigateTo("explore", q ? { q: q } : null);
+      });
+    }
+
+    // Impersonation Exit buttons
+    ["btn-exit-impersonation", "drawer-exit-impersonation", "sidebar-exit-impersonation"].forEach(function (id) {
+      var btn = document.getElementById(id);
+      if (btn) {
+        btn.addEventListener("click", function () {
+          closeMobileDrawer();
+          exitImpersonation("admin");
+        });
+      }
     });
 
     document.getElementById("sidebar-logout-btn").addEventListener("click", function () {
+      try { sessionStorage.removeItem(IMPERSONATE_STORAGE_KEY); } catch (e) {}
+      actingAsProfile = null;
       A.logoutUser();
     });
 
     document.getElementById("drawer-logout-btn").addEventListener("click", function () {
       closeMobileDrawer();
+      try { sessionStorage.removeItem(IMPERSONATE_STORAGE_KEY); } catch (e) {}
+      actingAsProfile = null;
       A.logoutUser();
     });
 
@@ -502,10 +587,13 @@
     });
 
     var escHandler = function (e) {
-      if (e.key === "Escape") closeMobileDrawer();
+      if (e.key === "Escape") {
+        closeMobileDrawer();
+        closeMobileSearch();
+      }
     };
     document.addEventListener("keydown", escHandler);
-    globalCleanups.push(function () {
+    sessionCleanups.push(function () {
       document.removeEventListener("keydown", escHandler);
       closeMobileDrawer();
     });
@@ -556,6 +644,79 @@
     }
   }
 
+  function mountActiveShellAndListeners() {
+    var root = document.getElementById("app-root");
+    var active = getActiveSession();
+    if (!active) return;
+
+    runSessionCleanup();
+
+    if (HMM.blocks && HMM.blocks.init) {
+      HMM.blocks.init(active.user.uid);
+      sessionCleanups.push(function () {
+        HMM.blocks.cleanup();
+      });
+    }
+
+    renderShell(root, active);
+
+    if (HMM.blocks && HMM.blocks.subscribe) {
+      sessionCleanups.push(
+        HMM.blocks.subscribe(function () {
+          var latest = getActiveSession();
+          if (latest) renderRightRailSuggestions(latest);
+        })
+      );
+    }
+
+    sessionCleanups.push(subscribeToGlobalBadges(active.user.uid));
+  }
+
+  async function startImpersonation(targetOrUid, targetRoute) {
+    if (!currentSession || !currentSession.isAdmin) {
+      U.showToast("Only authorized administrators can login as another user.", "error");
+      return;
+    }
+    var targetProfile = typeof targetOrUid === "string"
+      ? await A.getUserProfile(targetOrUid)
+      : targetOrUid;
+    if (!targetProfile || !targetProfile.uid) {
+      U.showToast("Target user account not found.", "error");
+      return;
+    }
+    if (targetProfile.uid === currentSession.user.uid) {
+      exitImpersonation("profile");
+      return;
+    }
+
+    actingAsProfile = targetProfile;
+    try { sessionStorage.setItem(IMPERSONATE_STORAGE_KEY, targetProfile.uid); } catch (e) {}
+    mountActiveShellAndListeners();
+    U.showToast("Now logged in as " + targetProfile.name + " (@" + targetProfile.username + ")", "success");
+
+    var nextHash = "#" + (targetRoute || "profile");
+    if (window.location.hash === nextHash) {
+      renderActiveRoute();
+    } else {
+      window.location.hash = nextHash;
+    }
+  }
+
+  function exitImpersonation(targetRoute) {
+    actingAsProfile = null;
+    try { sessionStorage.removeItem(IMPERSONATE_STORAGE_KEY); } catch (e) {}
+    if (!currentSession) return;
+    mountActiveShellAndListeners();
+    U.showToast("Returned to Admin account.", "success");
+
+    var nextHash = "#" + (targetRoute || "admin");
+    if (window.location.hash === nextHash) {
+      renderActiveRoute();
+    } else {
+      window.location.hash = nextHash;
+    }
+  }
+
   function renderActiveRoute() {
     closeMobileDrawer();
     var root = document.getElementById("app-root");
@@ -576,6 +737,8 @@
       else A.renderAuthView(root, "login");
       return;
     }
+
+    var activeSession = getActiveSession();
 
     // Signed-in user -> route inside App Shell
     if (!route || route === "login" || route === "register" || route === "forgot") {
@@ -604,23 +767,33 @@
     });
 
     var ctx = {
-      user: currentSession.user,
-      profile: currentSession.profile,
-      isAdmin: currentSession.isAdmin,
+      user: activeSession.user,
+      profile: activeSession.profile,
+      isAdmin: activeSession.isAdmin,
+      isRealAdmin: activeSession.isRealAdmin,
+      isImpersonating: activeSession.isImpersonating,
+      realAdminUser: activeSession.realAdminUser,
+      realAdminProfile: activeSession.realAdminProfile,
+      startImpersonation: startImpersonation,
+      exitImpersonation: exitImpersonation,
       mainEl: document.getElementById("page-main"),
       onCleanup: function (fn) {
         if (typeof fn === "function") activeViewCleanup.push(fn);
       },
       openReport: function (opts) {
-        openReportModal(Object.assign({ reporterId: currentSession.user.uid }, opts));
+        openReportModal(Object.assign({ reporterId: activeSession.user.uid }, opts));
       },
       refreshProfile: async function () {
-        var fresh = await A.getUserProfile(currentSession.user.uid);
+        var fresh = await A.getUserProfile(activeSession.user.uid);
         if (fresh) {
-          if (currentSession.isAdmin && fresh.role !== "admin") fresh.role = "admin";
-          currentSession.profile = fresh;
+          if (activeSession.isAdmin && fresh.role !== "admin") fresh.role = "admin";
+          if (activeSession.isImpersonating) {
+            actingAsProfile = fresh;
+          } else {
+            currentSession.profile = fresh;
+          }
           ctx.profile = fresh;
-          var isOffAdm = currentSession.isAdmin || U.isOfficialAdminUser(fresh);
+          var isOffAdm = activeSession.isAdmin || U.isOfficialAdminUser(fresh);
           ["sidebar-profile-name", "drawer-profile-name", "hdr-profile-name"].forEach(function (id) {
             var el = document.getElementById(id);
             if (el) el.textContent = fresh.name;
@@ -636,7 +809,7 @@
           var drwAv = document.getElementById("drawer-profile-avatar");
           if (drwAv) drwAv.innerHTML = U.renderAvatarHtml({ name: fresh.name, avatarUrl: fresh.avatarUrl, avatarColor: fresh.avatarColor, size: "md", online: true, isAdmin: isOffAdm });
         }
-        return currentSession.profile;
+        return ctx.profile;
       },
     };
 
@@ -775,25 +948,25 @@
       }
 
       currentSession = { user: user, profile: profile, isAdmin: isAdmin };
+      actingAsProfile = null;
 
-      // Initialize two-way user block listeners before rendering shell/views
-      if (HMM.blocks && HMM.blocks.init) {
-        HMM.blocks.init(user.uid);
-        globalCleanups.push(function () {
-          HMM.blocks.cleanup();
-        });
+      // Restore admin impersonation session across reloads if previously active
+      if (isAdmin) {
+        try {
+          var savedActingUid = sessionStorage.getItem(IMPERSONATE_STORAGE_KEY);
+          if (savedActingUid && savedActingUid !== user.uid) {
+            var restoredTarget = await A.getUserProfile(savedActingUid);
+            if (restoredTarget) {
+              actingAsProfile = restoredTarget;
+            } else {
+              sessionStorage.removeItem(IMPERSONATE_STORAGE_KEY);
+            }
+          }
+        } catch (e) {}
       }
 
-      renderShell(root, currentSession);
-      if (HMM.blocks && HMM.blocks.subscribe) {
-        globalCleanups.push(
-          HMM.blocks.subscribe(function () {
-            if (currentSession) renderRightRailSuggestions(currentSession);
-          })
-        );
-      }
       globalCleanups.push(attachPresence(user.uid));
-      globalCleanups.push(subscribeToGlobalBadges(user.uid));
+      mountActiveShellAndListeners();
 
       // Resume deep-linked shared profile URL if user just signed in
       try {
@@ -844,12 +1017,25 @@
       if (!user) {
         runGlobalCleanup();
         currentSession = null;
+        actingAsProfile = null;
+        try { sessionStorage.removeItem(IMPERSONATE_STORAGE_KEY); } catch (e) {}
         renderActiveRoute();
         return;
       }
       handleSignedInUser(user);
     });
   }
+
+  HMM.impersonation = {
+    start: startImpersonation,
+    stop: exitImpersonation,
+    isActive: function () {
+      return Boolean(currentSession && currentSession.isAdmin && actingAsProfile);
+    },
+    getTarget: function () {
+      return actingAsProfile;
+    },
+  };
 
   if (document.readyState === "loading") {
     document.addEventListener("DOMContentLoaded", startApp);

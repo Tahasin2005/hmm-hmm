@@ -36,6 +36,9 @@
     }
 
     var isOwnProfile = targetProfile.uid === ctx.user.uid;
+    if (!isOwnProfile && HMM.feed && HMM.feed.recordProfileVisit) {
+      HMM.feed.recordProfileVisit(targetProfile.uid);
+    }
     var socialState = {
       friendUids: new Set(),
       followingUids: new Set(),
@@ -50,17 +53,33 @@
     ctx.mainEl.innerHTML =
       '<section class="card profile-card" id="profile-header-card"></section>' +
       '<div id="profile-admin-announcements-slot"></div>' +
+      (isOwnProfile ? '<div id="profile-composer-slot"></div>' : "") +
       '<div id="profile-posts-section">' +
       '<div class="page-header">' +
       '<h2 style="font-size:18px;font-weight:800;">Posts</h2>' +
-      (isOwnProfile ? '<a href="#feed" class="btn btn-primary btn-sm">' + U.ICONS.plus + " Create Post</a>" : "") +
       "</div>" +
-      '<div id="profile-posts-container" style="display:flex;flex-direction:column;gap:14px;">' +
+      '<div id="profile-posts-container" class="feed-posts-stack">' +
       '<div class="card empty-state"><div class="spinner"></div><p>Loading posts...</p></div></div></div>';
 
     var postsSection = document.getElementById("profile-posts-section");
     var postsContainer = document.getElementById("profile-posts-container");
     var adminAnnSlot = document.getElementById("profile-admin-announcements-slot");
+    var profileComposerSlot = document.getElementById("profile-composer-slot");
+    var profileComposerCtrl = null;
+
+    if (isOwnProfile && profileComposerSlot && HMM.feed.mountCompactComposer) {
+      profileComposerCtrl = HMM.feed.mountCompactComposer(profileComposerSlot, ctx, {
+        onPublished: async function () {
+          try {
+            userPosts = await HMM.feed.getUserPosts(targetProfile.uid);
+            var refreshedProf = await HMM.authService.getUserProfile(targetProfile.uid);
+            if (refreshedProf) targetProfile = refreshedProf;
+            renderHeader();
+            renderProfilePosts();
+          } catch (e) {}
+        },
+      });
+    }
 
     var postManager = HMM.feed.createPostListManager({
       container: postsContainer,
@@ -600,7 +619,13 @@
           ? '<button type="button" class="btn btn-secondary btn-sm" data-paction="unfollow">Following</button>'
           : '<button type="button" class="btn btn-outline btn-sm" data-paction="follow">Follow</button>';
 
+        var adminLoginAsBtn =
+          ctx.isRealAdmin && !ctx.isImpersonating && !isProfileAdmin
+            ? '<button type="button" class="btn btn-primary btn-sm" data-paction="login-as" title="Login as this user">' + U.ICONS.user + " Login As</button>"
+            : "";
+
         actionsHtml =
+          adminLoginAsBtn +
           friendBtn +
           followBtn +
           '<a href="#messages?uid=' + encodeURIComponent(targetProfile.uid) + '" class="btn btn-secondary btn-sm">' + U.ICONS.message + " Message</a>" +
@@ -766,6 +791,10 @@
       var btn = e.target.closest("[data-paction]");
       if (!btn) return;
       var action = btn.dataset.paction;
+      if (action === "login-as" && ctx.startImpersonation) {
+        ctx.startImpersonation(targetProfile, "profile");
+        return;
+      }
       if (action === "report") {
         ctx.openReport({
           targetType: "user",
@@ -867,6 +896,7 @@
       if (unsubSocial) unsubSocial();
       if (unsubReacts) unsubReacts();
       if (unsubBlocks) unsubBlocks();
+      if (profileComposerCtrl) profileComposerCtrl.cleanup();
       postManager.cleanup();
     });
 

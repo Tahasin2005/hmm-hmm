@@ -247,24 +247,28 @@
 
     ctx.mainEl.innerHTML =
       '<div class="page-header"><div><h1 class="page-title">Admin &amp; Moderation Console</h1>' +
-      '<p class="page-subtitle">AI bulk moderation, anonymous feed promos/videos, announcements, branding, and account inspector.</p></div>' +
+      '<p class="page-subtitle">AI moderation, user impersonation, branding &amp; SEO, information feed, banner ads, and feed videos.</p></div>' +
       '<button type="button" id="admin-refresh-btn" class="btn btn-secondary btn-sm">Refresh data</button></div>' +
       '<div class="kpi-grid" id="admin-kpi-grid"></div>' +
-      '<div class="card admin-console-card"><div class="tabs" id="admin-tabs">' +
+      '<div class="card admin-console-card"><div class="tabs admin-console-tabs" id="admin-tabs">' +
       '<button type="button" class="tab-btn active" data-tab="ai">' + U.ICONS.cpu + " AI Moderation</button>" +
-      '<button type="button" class="tab-btn" data-tab="promos">' + U.ICONS.video + ' Feed Ads &amp; Videos <span class="tab-count" id="adm-cnt-promos">0</span></button>' +
-      '<button type="button" class="tab-btn" data-tab="announcements">' + U.ICONS.megaphone + ' Announcements <span class="tab-count" id="adm-cnt-ann">0</span></button>' +
       '<button type="button" class="tab-btn" data-tab="users">' + U.ICONS.users + ' Users <span class="tab-count" id="adm-cnt-users">0</span></button>' +
-      '<button type="button" class="tab-btn" data-tab="trash">' + U.ICONS.trash + ' Trash <span class="tab-count" id="adm-cnt-trash">0</span></button>' +
       '<button type="button" class="tab-btn" data-tab="branding">' + U.ICONS.globe + " Branding &amp; SEO</button>" +
+      '<button type="button" class="tab-btn" data-tab="announcements">' + U.ICONS.megaphone + ' Information Feed <span class="tab-count" id="adm-cnt-ann">0</span></button>' +
+      '<button type="button" class="tab-btn" data-tab="ads">' + U.ICONS.sparkles + ' Ads <span class="tab-count" id="adm-cnt-ads">0</span></button>' +
+      '<button type="button" class="tab-btn" data-tab="videos">' + U.ICONS.video + ' Feed Videos <span class="tab-count" id="adm-cnt-videos">0</span></button>' +
+      '<button type="button" class="tab-btn" data-tab="trash">' + U.ICONS.trash + ' Trash <span class="tab-count" id="adm-cnt-trash">0</span></button>' +
       '<button type="button" class="tab-btn" data-tab="reports">Reports <span class="tab-count" id="adm-cnt-reports">0</span></button>' +
       '<button type="button" class="tab-btn" data-tab="posts">Posts <span class="tab-count" id="adm-cnt-posts">0</span></button>' +
       '</div><div id="admin-panel" class="admin-panel-body"><p class="text-muted">Loading admin console...</p></div></div>';
 
     function renderKpis() {
       var openReports = data.reports.filter(function (r) { return r.status === "open"; }).length;
-      document.getElementById("adm-cnt-promos").textContent = String(data.promos.length);
+      var adsList = data.promos.filter(function (p) { return p.promoType === "image_ad"; });
+      var videosList = data.promos.filter(function (p) { return p.promoType !== "image_ad"; });
       document.getElementById("adm-cnt-ann").textContent = String(data.announcements.length);
+      document.getElementById("adm-cnt-ads").textContent = String(adsList.length);
+      document.getElementById("adm-cnt-videos").textContent = String(videosList.length);
       document.getElementById("adm-cnt-trash").textContent = String(data.trash.length);
       document.getElementById("adm-cnt-reports").textContent = String(data.reports.length);
       document.getElementById("adm-cnt-users").textContent = String(data.users.length);
@@ -274,7 +278,7 @@
         '<div class="kpi-card"><div class="kpi-label">AI Moderation</div><div class="kpi-value" style="font-size:20px;color:' +
         (data.aiConfig.enabled ? "var(--accent)" : "var(--text-muted)") + ';">' +
         (data.aiConfig.enabled ? "Active" : "Paused") + "</div></div>" +
-        '<div class="kpi-card"><div class="kpi-label">Active Feed Slots</div><div class="kpi-value" style="color:var(--accent);">' +
+        '<div class="kpi-card"><div class="kpi-label">Active Ads &amp; Videos</div><div class="kpi-value" style="color:var(--accent);">' +
         data.promos.filter(function (p) { return p.isActive; }).length + "</div></div>" +
         '<div class="kpi-card"><div class="kpi-label">Open Reports</div><div class="kpi-value" style="color:var(--amber);">' + openReports + "</div></div>" +
         '<div class="kpi-card"><div class="kpi-label">Posts &amp; Users</div><div class="kpi-value">' + data.posts.length + " / " + data.users.length + "</div></div>";
@@ -523,61 +527,67 @@
     }
 
     // ============================================================================
-    // ANONYMOUS IN-FEED PROMOS / VIDEOS & ADS TAB
+    // DEDICATED ADS & FEED VIDEOS TABS (Anonymous In-Feed Injection)
     // ============================================================================
-    function renderPromosTab(panel) {
+    function renderPromoSectionTab(panel, mode) {
+      var isAdMode = mode === "ads";
+      var filteredPromos = data.promos.filter(function (pr) {
+        return isAdMode ? pr.promoType === "image_ad" : pr.promoType !== "image_ad";
+      });
       var uploadedPromoImg = "";
 
       panel.innerHTML =
         '<div class="admin-grid-2">' +
         '<div class="admin-section-box">' +
-        "<h3>Add Anonymous In-Feed Video or Ad</h3>" +
-        '<p class="text-muted" style="font-size:13px;margin:4px 0 14px;">Automatically injected between community posts on the Home Feed with <strong>no author name or profile avatar</strong>.</p>' +
+        "<h3>" + (isAdMode ? "Publish In-Feed Banner Ad" : "Publish In-Feed Embedded Video") + "</h3>" +
+        '<p class="text-muted" style="font-size:13px;margin:4px 0 14px;">' +
+        (isAdMode
+          ? "Injects an anonymous sponsor or promo image banner between Home Feed posts with optional click-through CTA."
+          : "Injects an anonymous YouTube, Facebook, or Vimeo video between Home Feed posts with zero author info.") +
+        "</p>" +
         '<form id="promo-create-form" class="auth-form">' +
-        '<div class="form-group"><label class="form-label" for="pr-type">Slot Type</label>' +
-        '<select id="pr-type" class="form-select">' +
-        '<option value="embed">Embedded Video (YouTube / Facebook / Vimeo)</option>' +
-        '<option value="image_ad">Image Banner Ad</option></select></div>' +
         '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">' +
         '<div class="form-group"><label class="form-label" for="pr-label">Top Badge Label</label>' +
-        '<input id="pr-label" class="form-input" type="text" maxlength="40" value="Featured" placeholder="Featured / Sponsored" /></div>' +
+        '<input id="pr-label" class="form-input" type="text" maxlength="40" value="' + (isAdMode ? "Sponsored" : "Featured Video") + '" placeholder="Sponsored / Featured" /></div>' +
         '<div class="form-group"><label class="form-label" for="pr-interval">Show Every N Posts</label>' +
         '<input id="pr-interval" class="form-input" type="number" min="1" max="50" value="4" required /></div></div>' +
         '<div class="form-group"><label class="form-label" for="pr-title">Headline (optional)</label>' +
-        '<input id="pr-title" class="form-input" type="text" maxlength="140" placeholder="e.g., Trending Highlight" /></div>' +
+        '<input id="pr-title" class="form-input" type="text" maxlength="140" placeholder="' + (isAdMode ? "e.g., Special Community Offer" : "e.g., Watch Highlight") + '" /></div>' +
         '<div class="form-group"><label class="form-label" for="pr-caption">Caption (optional)</label>' +
         '<textarea id="pr-caption" class="form-textarea" rows="2" maxlength="600" placeholder="Short description or message..."></textarea></div>' +
-        '<div class="form-group" id="pr-embed-group"><label class="form-label" for="pr-embed-raw">YouTube or Facebook Embed Code / Video URL</label>' +
-        '<textarea id="pr-embed-raw" class="form-textarea font-mono" rows="2" placeholder=\'<iframe src="https://www.youtube.com/embed/..."></iframe> or video link\'></textarea>' +
-        '<div id="pr-embed-preview" style="margin-top:8px;"></div></div>' +
-        '<div class="form-group hidden" id="pr-image-group"><label class="form-label">Ad Banner Image (Upload or URL)</label>' +
-        '<input id="pr-image-url" class="form-input" type="text" placeholder="https://example.com/banner.jpg" style="margin-bottom:6px;" />' +
-        '<input id="pr-image-file" type="file" accept="image/*" style="font-size:12.5px;" />' +
-        '<div id="pr-image-preview" style="margin-top:8px;"></div></div>' +
+        (isAdMode
+          ? '<div class="form-group"><label class="form-label">Ad Banner Image (Upload or URL)</label>' +
+            '<input id="pr-image-url" class="form-input" type="text" placeholder="https://example.com/banner.jpg" style="margin-bottom:6px;" />' +
+            '<input id="pr-image-file" type="file" accept="image/*" style="font-size:12.5px;" />' +
+            '<div id="pr-image-preview" style="margin-top:8px;"></div></div>'
+          : '<div class="form-group"><label class="form-label" for="pr-embed-raw">YouTube or Facebook Embed Code / Video URL</label>' +
+            '<textarea id="pr-embed-raw" class="form-textarea font-mono" rows="2" placeholder=\'<iframe src="https://www.youtube.com/embed/..."></iframe> or video link\'></textarea>' +
+            '<div id="pr-embed-preview" style="margin-top:8px;"></div></div>') +
         '<div style="display:grid;grid-template-columns:1.3fr 1fr;gap:10px;">' +
         '<div class="form-group"><label class="form-label" for="pr-cta-url">CTA Link URL (optional)</label>' +
         '<input id="pr-cta-url" class="form-input" type="url" placeholder="https://..." /></div>' +
         '<div class="form-group"><label class="form-label" for="pr-cta-text">Button Label</label>' +
         '<input id="pr-cta-text" class="form-input" type="text" maxlength="40" placeholder="Learn more" /></div></div>' +
-        '<button type="submit" id="pr-submit-btn" class="btn btn-primary" style="margin-top:6px;">' + U.ICONS.sparkles + " Publish to Home Feed</button>" +
+        '<button type="submit" id="pr-submit-btn" class="btn btn-primary" style="margin-top:6px;">' +
+        (isAdMode ? U.ICONS.sparkles + " Publish Ad to Feed" : U.ICONS.video + " Publish Video to Feed") + "</button>" +
         "</form></div>" +
 
         '<div class="admin-section-box">' +
-        "<h3>Active &amp; Saved Feed Slots (" + data.promos.length + ")</h3>" +
-        '<p class="text-muted" style="font-size:13px;margin:4px 0 12px;">Active slots rotate automatically between posts on every user\'s Home Feed.</p>' +
-        (data.promos.length === 0
-          ? '<div class="empty-state" style="padding:28px 12px;"><p>No in-feed videos or ads added yet.</p></div>'
+        "<h3>" + (isAdMode ? "Saved Banner Ads" : "Saved Feed Videos") + " (" + filteredPromos.length + ")</h3>" +
+        '<p class="text-muted" style="font-size:13px;margin:4px 0 12px;">Active items rotate automatically between posts on every user\'s Home Feed.</p>' +
+        (filteredPromos.length === 0
+          ? '<div class="empty-state" style="padding:28px 12px;"><p>No ' + (isAdMode ? "banner ads" : "feed videos") + " added yet.</p></div>"
           : '<div class="promo-admin-list">' +
-            data.promos
+            filteredPromos
               .map(function (pr) {
                 return (
                   '<div class="promo-admin-item">' +
                   '<div class="promo-admin-head">' +
                   '<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">' +
                   '<span class="status-tag ' + (pr.isActive ? "status-resolved" : "status-dismissed") + '">' + (pr.isActive ? "Active" : "Paused") + "</span>" +
-                  '<span class="status-tag status-open">' + U.escapeHtml(pr.label || "Featured") + "</span>" +
-                  '<span class="text-muted" style="font-size:12px;">Every ' + (pr.intervalPosts || 4) + " posts · " +
-                  (pr.promoType === "embed" ? U.escapeHtml(pr.embedProvider || "video") : "image ad") + "</span></div>" +
+                  '<span class="status-tag status-open">' + U.escapeHtml(pr.label || (isAdMode ? "Sponsored" : "Featured")) + "</span>" +
+                  '<span class="text-muted" style="font-size:12px;">Every ' + (pr.intervalPosts || 4) + " posts" +
+                  (!isAdMode && pr.embedProvider ? " · " + U.escapeHtml(pr.embedProvider) : "") + "</span></div>" +
                   '<div style="display:flex;gap:6px;">' +
                   '<button type="button" class="btn btn-secondary btn-sm" data-promo-toggle="' + U.escapeHtml(pr.promoId) + '" data-active="' + (pr.isActive ? "1" : "0") + '">' + (pr.isActive ? "Pause" : "Activate") + "</button>" +
                   '<button type="button" class="btn btn-danger-soft btn-sm" data-promo-del="' + U.escapeHtml(pr.promoId) + '">' + U.ICONS.trash + "</button>" +
@@ -596,52 +606,45 @@
             "</div>") +
         "</div></div>";
 
-      var typeSel = document.getElementById("pr-type");
-      var embedGrp = document.getElementById("pr-embed-group");
-      var imgGrp = document.getElementById("pr-image-group");
-      var embedRaw = document.getElementById("pr-embed-raw");
-      var embedPrev = document.getElementById("pr-embed-preview");
-      var imgUrl = document.getElementById("pr-image-url");
-      var imgFile = document.getElementById("pr-image-file");
-      var imgPrev = document.getElementById("pr-image-preview");
+      if (isAdMode) {
+        var imgUrl = document.getElementById("pr-image-url");
+        var imgFile = document.getElementById("pr-image-file");
+        var imgPrev = document.getElementById("pr-image-preview");
 
-      typeSel.addEventListener("change", function () {
-        var isImg = typeSel.value === "image_ad";
-        embedGrp.classList.toggle("hidden", isImg);
-        imgGrp.classList.toggle("hidden", !isImg);
-      });
+        imgFile.addEventListener("change", async function () {
+          var f = imgFile.files && imgFile.files[0];
+          if (!f) return;
+          try {
+            uploadedPromoImg = await U.compressImageFileToDataUrl(f, 960, 0.82, 310000);
+            imgUrl.value = "";
+            imgPrev.innerHTML = '<img src="' + U.escapeHtml(uploadedPromoImg) + '" alt="Preview" style="max-height:150px;border-radius:10px;border:1px solid var(--border);" />';
+            U.showToast("Ad image ready!", "success");
+          } catch (err) {
+            U.showToast(err.message, "error");
+          }
+        });
 
-      embedRaw.addEventListener("input", function () {
-        var parsed = U.parseSafeEmbedInput(embedRaw.value);
-        embedPrev.innerHTML = parsed
-          ? U.renderEmbedPlayerHtml(parsed)
-          : embedRaw.value.trim()
-          ? '<p class="text-danger" style="font-size:12.5px;">Unrecognized embed URL/iframe.</p>'
-          : "";
-        if (parsed && U.fitFacebookPostEmbeds) U.fitFacebookPostEmbeds(embedPrev);
-      });
-
-      imgFile.addEventListener("change", async function () {
-        var f = imgFile.files && imgFile.files[0];
-        if (!f) return;
-        try {
-          uploadedPromoImg = await U.compressImageFileToDataUrl(f, 960, 0.82, 310000);
-          imgUrl.value = "";
-          imgPrev.innerHTML = '<img src="' + U.escapeHtml(uploadedPromoImg) + '" alt="Preview" style="max-height:150px;border-radius:10px;border:1px solid var(--border);" />';
-          U.showToast("Ad image ready!", "success");
-        } catch (err) {
-          U.showToast(err.message, "error");
-        }
-      });
-
-      imgUrl.addEventListener("input", function () {
-        uploadedPromoImg = "";
-        var v = imgUrl.value.trim();
-        imgPrev.innerHTML =
-          v && U.validateOptionalUrl(v) === null
-            ? '<img src="' + U.escapeHtml(v) + '" alt="Preview" style="max-height:150px;border-radius:10px;border:1px solid var(--border);" />'
+        imgUrl.addEventListener("input", function () {
+          uploadedPromoImg = "";
+          var v = imgUrl.value.trim();
+          imgPrev.innerHTML =
+            v && U.validateOptionalUrl(v) === null
+              ? '<img src="' + U.escapeHtml(v) + '" alt="Preview" style="max-height:150px;border-radius:10px;border:1px solid var(--border);" />'
+              : "";
+        });
+      } else {
+        var embedRaw = document.getElementById("pr-embed-raw");
+        var embedPrev = document.getElementById("pr-embed-preview");
+        embedRaw.addEventListener("input", function () {
+          var parsed = U.parseSafeEmbedInput(embedRaw.value);
+          embedPrev.innerHTML = parsed
+            ? U.renderEmbedPlayerHtml(parsed)
+            : embedRaw.value.trim()
+            ? '<p class="text-danger" style="font-size:12.5px;">Unrecognized embed URL/iframe.</p>'
             : "";
-      });
+          if (parsed && U.fitFacebookPostEmbeds) U.fitFacebookPostEmbeds(embedPrev);
+        });
+      }
 
       document.getElementById("promo-create-form").addEventListener("submit", async function (e) {
         e.preventDefault();
@@ -649,18 +652,18 @@
         btn.disabled = true;
         try {
           await HMM.promos.create({
-            promoType: typeSel.value,
+            promoType: isAdMode ? "image_ad" : "embed",
             label: document.getElementById("pr-label").value,
             intervalPosts: document.getElementById("pr-interval").value,
             title: document.getElementById("pr-title").value,
             caption: document.getElementById("pr-caption").value,
-            embedRaw: embedRaw.value,
-            imageUrl: uploadedPromoImg || imgUrl.value.trim(),
+            embedRaw: !isAdMode ? document.getElementById("pr-embed-raw").value : "",
+            imageUrl: isAdMode ? (uploadedPromoImg || document.getElementById("pr-image-url").value.trim()) : "",
             ctaUrl: document.getElementById("pr-cta-url").value,
             ctaText: document.getElementById("pr-cta-text").value,
             isActive: true,
           });
-          U.showToast("In-feed promo published!", "success");
+          U.showToast(isAdMode ? "Banner Ad published to Home Feed!" : "Feed Video published to Home Feed!", "success");
           await loadAll();
         } catch (err) {
           U.showToast(U.getFriendlyErrorMessage(err), "error");
@@ -675,9 +678,9 @@
     function renderAnnouncementsTab(panel) {
       panel.innerHTML =
         '<div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:16px;">' +
-        '<div><h3 style="font-size:16px;font-weight:800;">Official Home Feed Announcements</h3>' +
-        '<p class="text-muted" style="font-size:13px;">Synced with your Official Admin Profile. Pinned announcements appear at the top of everyone\'s Home Feed.</p></div>' +
-        '<button type="button" id="btn-adm-new-ann" class="btn btn-primary btn-sm">' + U.ICONS.megaphone + " New Announcement</button></div>" +
+        '<div><h3 style="font-size:16px;font-weight:800;">Information Feed &amp; Official Announcements</h3>' +
+        '<p class="text-muted" style="font-size:13px;">Pinned notices posted here appear prominently at the top of everyone\'s Home Feed.</p></div>' +
+        '<button type="button" id="btn-adm-new-ann" class="btn btn-primary btn-sm">' + U.ICONS.megaphone + " New Info Notice</button></div>" +
         (data.announcements.length === 0
           ? '<div class="empty-state"><div class="empty-state-icon">' + U.ICONS.megaphone + "</div><h3>No announcements yet</h3><p>Publish an official announcement with optional banner image.</p></div>"
           : '<div class="trash-list">' +
@@ -879,7 +882,8 @@
       if (!panel) return;
 
       if (activeTab === "ai") { renderAiTab(panel); return; }
-      if (activeTab === "promos") { renderPromosTab(panel); return; }
+      if (activeTab === "ads") { renderPromoSectionTab(panel, "ads"); return; }
+      if (activeTab === "videos") { renderPromoSectionTab(panel, "videos"); return; }
       if (activeTab === "announcements") { renderAnnouncementsTab(panel); return; }
       if (activeTab === "trash") { renderTrashTab(panel); return; }
       if (activeTab === "branding") { renderBrandingTab(panel); return; }
@@ -929,10 +933,13 @@
                 '<td data-label="Stats" class="tabular-nums text-muted" style="font-size:12.5px;">' + (u.postsCount || 0) + " posts · " + (u.friendsCount || 0) + " friends</td>" +
                 '<td data-label="Status">' + (u.isSuspended ? '<span class="status-tag status-suspended">Suspended</span>' : '<span class="status-tag status-resolved">Active</span>') + "</td>" +
                 '<td data-label="Actions"><div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;">' +
-                '<a href="#inspect?uid=' + encodeURIComponent(u.uid) + '" class="btn btn-outline btn-sm" title="Inspect account read-only">' + U.ICONS.eye + " View As</a>" +
+                '<a href="#inspect?uid=' + encodeURIComponent(u.uid) + '" class="btn btn-secondary btn-sm" title="Inspect account read-only">' + U.ICONS.eye + " View</a>" +
+                (!isSelf
+                  ? '<button type="button" class="btn btn-primary btn-sm" data-login-as-uid="' + U.escapeHtml(u.uid) + '" title="Log into this account to post, message &amp; manage">' + U.ICONS.user + " Login As</button>"
+                  : "") +
                 (isSelf
                   ? '<span class="text-muted" style="font-size:12px;">You</span>'
-                  : '<button type="button" class="btn ' + (u.isSuspended ? "btn-primary" : "btn-danger-soft") + ' btn-sm" data-toggle-suspend="' + U.escapeHtml(u.uid) + '" data-suspended="' + (u.isSuspended ? "1" : "0") + '">' + (u.isSuspended ? "Unsuspend" : "Suspend") + "</button>") +
+                  : '<button type="button" class="btn ' + (u.isSuspended ? "btn-outline" : "btn-danger-soft") + ' btn-sm" data-toggle-suspend="' + U.escapeHtml(u.uid) + '" data-suspended="' + (u.isSuspended ? "1" : "0") + '">' + (u.isSuspended ? "Unsuspend" : "Suspend") + "</button>") +
                 "</div></td></tr>"
               );
             })
@@ -991,6 +998,14 @@
     });
 
     document.getElementById("admin-panel").addEventListener("click", async function (e) {
+      var loginAsBtn = e.target.closest("[data-login-as-uid]");
+      if (loginAsBtn && ctx.startImpersonation) {
+        var targetUid = loginAsBtn.dataset.loginAsUid;
+        var targetUser = data.users.find(function (u) { return u.uid === targetUid; }) || targetUid;
+        ctx.startImpersonation(targetUser, "profile");
+        return;
+      }
+
       var promoToggle = e.target.closest("[data-promo-toggle]");
       if (promoToggle) {
         promoToggle.disabled = true;
@@ -1261,10 +1276,15 @@
       '<span class="view-as-pill">' + U.ICONS.eye + " Admin Read-Only Preview</span>" +
       '<span>Viewing KLORIX as <strong>' + U.escapeHtml(targetProfile.name) + '</strong> (@' + U.escapeHtml(targetProfile.username) + ")</span>" +
       "</div>" +
+      '<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">' +
+      (targetProfile.uid !== ctx.user.uid
+        ? '<button type="button" id="btn-inspect-login-as" class="btn btn-primary btn-sm">' + U.ICONS.user + " Login as @" + U.escapeHtml(targetProfile.username) + "</button>"
+        : "") +
       '<a href="#admin" class="btn btn-secondary btn-sm">Exit View-As</a>' +
       "</div>" +
+      "</div>" +
       '<div class="card admin-console-card">' +
-      '<div class="tabs" id="inspect-tabs">' +
+      '<div class="tabs admin-console-tabs" id="inspect-tabs">' +
       '<button type="button" class="tab-btn active" data-itab="overview">Account Overview</button>' +
       '<button type="button" class="tab-btn" data-itab="feed">Home Feed View</button>' +
       '<button type="button" class="tab-btn" data-itab="posts">Posts <span class="tab-count">' + inspected.userPosts.length + "</span></button>" +
@@ -1273,6 +1293,13 @@
       '<button type="button" class="tab-btn" data-itab="blocks">Blocked Users <span class="tab-count">' + inspected.blocksOut.length + "</span></button>" +
       '<button type="button" class="tab-btn" data-itab="chats">Chats <span class="tab-count">' + inspected.chats.length + "</span></button>" +
       '</div><div id="inspect-panel" class="admin-panel-body"></div></div>';
+
+    var inspectLoginAsBtn = document.getElementById("btn-inspect-login-as");
+    if (inspectLoginAsBtn && ctx.startImpersonation) {
+      inspectLoginAsBtn.addEventListener("click", function () {
+        ctx.startImpersonation(targetProfile, "profile");
+      });
+    }
 
     var activePostManager = null;
 
