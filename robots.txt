@@ -1,15 +1,15 @@
 User-agent: *
-# প্রাইভেট পেজগুলো ব্লক করুন (যেখানে গুগল যাওয়ার দরকার নেই)
+
 Disallow: /admin/
 Disallow: /settings/
 Disallow: /messages/
 Disallow: /login/
 Disallow: /api/
 
-# পাবলিক পেজগুলো ওপেন রাখুন
+
 Allow: /
 Allow: /posts/
 Allow: /profile/
 
-# আপনার সাইটম্যাপের লিংক দিন
+
 Sitemap: https://klorixcommunity.vercel.app/sitemap.xml
