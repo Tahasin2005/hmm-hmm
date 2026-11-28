@@ -105,14 +105,41 @@
   }
 
   function subscribeToGlobalBadges(uid) {
+    var latestNotifDocs = [];
+
+    function recomputeNotifBadge() {
+      var seenAt = U.getNotificationsSeenAt(uid);
+      var parsed = U.parseRoute();
+      if (parsed && parsed.route === "notifications") {
+        updateBadges(["badge-notifs", "hdr-badge-notifs", "drawer-badge-notifs"], 0);
+        return;
+      }
+      var unseen = latestNotifDocs.filter(function (n) {
+        if (!n || n.isRead || n.isSeen) return false;
+        if (HMM.blocks && HMM.blocks.isEitherBlocked(n.senderId)) return false;
+        var createdMs = U.timestampToMs(n.createdAt);
+        // If createdMs is 0 (pending serverTimestamp) or strictly newer than seenAt, treat as unseen
+        if (seenAt > 0 && createdMs > 0 && createdMs <= seenAt) return false;
+        return true;
+      }).length;
+      updateBadges(["badge-notifs", "hdr-badge-notifs", "drawer-badge-notifs"], unseen);
+    }
+
+    var onNotifsSeenEvent = function (ev) {
+      if (!ev || !ev.detail || ev.detail.uid === uid) {
+        recomputeNotifBadge();
+      }
+    };
+    window.addEventListener("hmm:notifs-seen", onNotifsSeenEvent);
+
     var u1 = HMM.db
       .collection("notifications")
       .where("recipientId", "==", uid)
       .limit(60)
       .onSnapshot(
         function (snap) {
-          var unread = snap.docs.filter(function (d) { return !d.data().isRead; }).length;
-          updateBadges(["badge-notifs", "hdr-badge-notifs", "drawer-badge-notifs"], unread);
+          latestNotifDocs = snap.docs.map(function (d) { return d.data(); });
+          recomputeNotifBadge();
         },
         function () {}
       );
@@ -143,6 +170,7 @@
     chatRef.on("value", chatCb, function () {});
 
     return function () {
+      window.removeEventListener("hmm:notifs-seen", onNotifsSeenEvent);
       if (u1) u1();
       if (u2) u2();
       chatRef.off("value", chatCb);
@@ -385,6 +413,7 @@
     var profile = session.profile;
     var isAdmin = session.isAdmin;
     var isOfficialAdmin = isAdmin || U.isOfficialAdminUser(profile);
+    var isVerifiedProfile = isOfficialAdmin || U.isVerifiedUser(profile);
     var cfg = HMM.siteConfig.get();
 
     var navItems = [
@@ -422,7 +451,11 @@
       })
       .join("");
 
-    var adminBadge = isOfficialAdmin ? U.renderAdminBadgeHtml("compact") : "";
+    var verifiedBadge = isOfficialAdmin
+      ? U.renderAdminBadgeHtml("compact")
+      : isVerifiedProfile
+      ? U.renderVipBadgeHtml("compact")
+      : "";
 
     var impersonationBarHtml = session.isImpersonating
       ? '<div class="impersonation-bar" id="impersonation-bar">' +
@@ -458,9 +491,9 @@
       '<button type="button" id="hdr-mobile-search-btn" class="icon-btn mobile-search-toggle-btn" title="Search" aria-label="Search" aria-expanded="false">' + U.ICONS.search + "</button>" +
       '<a href="#notifications" class="icon-btn" data-hdr-nav="notifications" title="Notifications" aria-label="Notifications">' + U.ICONS.bell + '<span id="hdr-badge-notifs" class="badge-dot hidden">0</span></a>' +
       '<a href="#profile" class="header-user-btn" title="My profile" id="hdr-user-link">' +
-      '<span id="hdr-profile-avatar">' + U.renderAvatarHtml({ name: profile.name, avatarUrl: profile.avatarUrl, avatarColor: profile.avatarColor, size: "xs", isAdmin: isOfficialAdmin }) + "</span>" +
+      '<span id="hdr-profile-avatar">' + U.renderAvatarHtml({ name: profile.name, avatarUrl: profile.avatarUrl, avatarColor: profile.avatarColor, size: "xs", isAdmin: isOfficialAdmin, isVerified: isVerifiedProfile }) + "</span>" +
       '<span class="header-user-name" id="hdr-profile-name">' + U.escapeHtml(profile.name) + "</span>" +
-      (isOfficialAdmin ? '<span class="header-user-admin-badge">' + adminBadge + "</span>" : "") +
+      (verifiedBadge ? '<span class="header-user-admin-badge">' + verifiedBadge + "</span>" : "") +
       "</a>" +
       "</div></div></header>" +
 
@@ -481,8 +514,8 @@
       '<button type="button" id="mobile-drawer-close" class="icon-btn" aria-label="Close navigation menu">' + U.ICONS.close + "</button>" +
       "</div>" +
       '<a href="#profile" class="sidebar-profile-mini" id="drawer-profile-card">' +
-      '<span id="drawer-profile-avatar">' + U.renderAvatarHtml({ name: profile.name, avatarUrl: profile.avatarUrl, avatarColor: profile.avatarColor, size: "md", online: true, isAdmin: isOfficialAdmin }) + "</span>" +
-      '<div class="sidebar-profile-info"><strong class="name-with-badge"><span id="drawer-profile-name">' + U.escapeHtml(profile.name) + "</span>" + adminBadge + "</strong>" +
+      '<span id="drawer-profile-avatar">' + U.renderAvatarHtml({ name: profile.name, avatarUrl: profile.avatarUrl, avatarColor: profile.avatarColor, size: "md", online: true, isAdmin: isOfficialAdmin, isVerified: isVerifiedProfile }) + "</span>" +
+      '<div class="sidebar-profile-info"><strong class="name-with-badge"><span id="drawer-profile-name">' + U.escapeHtml(profile.name) + "</span>" + verifiedBadge + "</strong>" +
       '<span id="drawer-profile-handle">@' + U.escapeHtml(profile.username) + "</span></div></a>" +
       '<nav class="mobile-drawer-nav"><div class="nav-list">' + drawerNavHtml + "</div></nav>" +
       '<div class="mobile-drawer-footer">' +
@@ -495,8 +528,8 @@
       '<div class="app-shell" id="hmm-app-shell">' +
       '<aside class="left-sidebar">' +
       '<a href="#profile" class="sidebar-profile-mini" id="sidebar-profile-card">' +
-      '<span id="sidebar-profile-avatar">' + U.renderAvatarHtml({ name: profile.name, avatarUrl: profile.avatarUrl, avatarColor: profile.avatarColor, size: "md", online: true, isAdmin: isOfficialAdmin }) + "</span>" +
-      '<div class="sidebar-profile-info"><strong class="name-with-badge"><span id="sidebar-profile-name">' + U.escapeHtml(profile.name) + "</span>" + adminBadge + "</strong>" +
+      '<span id="sidebar-profile-avatar">' + U.renderAvatarHtml({ name: profile.name, avatarUrl: profile.avatarUrl, avatarColor: profile.avatarColor, size: "md", online: true, isAdmin: isOfficialAdmin, isVerified: isVerifiedProfile }) + "</span>" +
+      '<div class="sidebar-profile-info"><strong class="name-with-badge"><span id="sidebar-profile-name">' + U.escapeHtml(profile.name) + "</span>" + verifiedBadge + "</strong>" +
       '<span id="sidebar-profile-handle">@' + U.escapeHtml(profile.username) + "</span></div></a>" +
       '<nav class="nav-card" aria-label="Main navigation"><div class="nav-list">' + leftNavHtml + "</div>" +
       '<hr style="border:none;border-top:1px solid var(--border);margin:8px 0;" />' +
@@ -628,11 +661,12 @@
       listEl.innerHTML = users
         .map(function (u) {
           var isOffAdmin = U.isOfficialAdminUser(u);
+          var isVer = U.isVerifiedUser(u);
           return (
             '<div class="user-row"><a href="#profile?uid=' + encodeURIComponent(u.uid) + '" class="user-row-left">' +
-            U.renderAvatarHtml({ name: u.name, avatarUrl: u.avatarUrl, avatarColor: u.avatarColor, size: "sm", isAdmin: isOffAdmin }) +
+            U.renderAvatarHtml({ name: u.name, avatarUrl: u.avatarUrl, avatarColor: u.avatarColor, size: "sm", isAdmin: isOffAdmin, isVerified: isVer }) +
             '<div class="user-row-meta"><span class="user-row-name name-with-badge">' + U.escapeHtml(u.name) +
-            (isOffAdmin ? U.renderAdminBadgeHtml("compact") : "") + "</span>" +
+            (isVer ? U.renderVerifiedBadgeHtml(u, "compact") : "") + "</span>" +
             '<span class="user-row-handle">@' + U.escapeHtml(u.username) + "</span></div></a>" +
             '<a href="#profile?uid=' + encodeURIComponent(u.uid) + '" class="btn btn-secondary btn-sm">View</a></div>'
           );
@@ -794,6 +828,7 @@
           }
           ctx.profile = fresh;
           var isOffAdm = activeSession.isAdmin || U.isOfficialAdminUser(fresh);
+          var isVer = isOffAdm || U.isVerifiedUser(fresh);
           ["sidebar-profile-name", "drawer-profile-name", "hdr-profile-name"].forEach(function (id) {
             var el = document.getElementById(id);
             if (el) el.textContent = fresh.name;
@@ -803,11 +838,11 @@
             if (el) el.textContent = "@" + fresh.username;
           });
           var hdrAv = document.getElementById("hdr-profile-avatar");
-          if (hdrAv) hdrAv.innerHTML = U.renderAvatarHtml({ name: fresh.name, avatarUrl: fresh.avatarUrl, avatarColor: fresh.avatarColor, size: "xs", isAdmin: isOffAdm });
+          if (hdrAv) hdrAv.innerHTML = U.renderAvatarHtml({ name: fresh.name, avatarUrl: fresh.avatarUrl, avatarColor: fresh.avatarColor, size: "xs", isAdmin: isOffAdm, isVerified: isVer });
           var sideAv = document.getElementById("sidebar-profile-avatar");
-          if (sideAv) sideAv.innerHTML = U.renderAvatarHtml({ name: fresh.name, avatarUrl: fresh.avatarUrl, avatarColor: fresh.avatarColor, size: "md", online: true, isAdmin: isOffAdm });
+          if (sideAv) sideAv.innerHTML = U.renderAvatarHtml({ name: fresh.name, avatarUrl: fresh.avatarUrl, avatarColor: fresh.avatarColor, size: "md", online: true, isAdmin: isOffAdm, isVerified: isVer });
           var drwAv = document.getElementById("drawer-profile-avatar");
-          if (drwAv) drwAv.innerHTML = U.renderAvatarHtml({ name: fresh.name, avatarUrl: fresh.avatarUrl, avatarColor: fresh.avatarColor, size: "md", online: true, isAdmin: isOffAdm });
+          if (drwAv) drwAv.innerHTML = U.renderAvatarHtml({ name: fresh.name, avatarUrl: fresh.avatarUrl, avatarColor: fresh.avatarColor, size: "md", online: true, isAdmin: isOffAdm, isVerified: isVer });
         }
         return ctx.profile;
       },
@@ -966,6 +1001,7 @@
       }
 
       globalCleanups.push(attachPresence(user.uid));
+      U.syncVerifiedUsers().catch(function () {});
       mountActiveShellAndListeners();
 
       // Resume deep-linked shared profile URL if user just signed in

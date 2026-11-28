@@ -604,11 +604,12 @@
             .map(function (r) {
               var meta = U.getReactionMeta(r.reactionType);
               var isAdm = U.isOfficialAdminUser(r);
+              var isVer = isAdm || U.isVerifiedUser(r);
               return (
                 '<div class="user-row"><a href="#profile?uid=' + encodeURIComponent(r.userId) + '" class="user-row-left" data-close-modal="1">' +
-                U.renderAvatarHtml({ name: r.userName, avatarUrl: r.userAvatarUrl, avatarColor: r.userAvatarColor, size: "sm", isAdmin: isAdm }) +
+                U.renderAvatarHtml({ name: r.userName, avatarUrl: r.userAvatarUrl, avatarColor: r.userAvatarColor, size: "sm", isAdmin: isAdm, isVerified: isVer }) +
                 '<div class="user-row-meta"><span class="user-row-name">' + U.escapeHtml(r.userName) +
-                (isAdm ? " " + U.renderAdminBadgeHtml("compact") : "") + "</span>" +
+                (isVer ? " " + U.renderVerifiedBadgeHtml(r, "compact") : "") + "</span>" +
                 (r.userUsername ? '<span class="user-row-handle">@' + U.escapeHtml(r.userUsername) + "</span>" : "") +
                 "</div></a>" +
                 '<span class="reactor-emoji-badge" title="' + meta.label + '">' + meta.emoji + " <span>" + meta.label + "</span></span></div>"
@@ -770,6 +771,7 @@
         .map(function (c) {
           var canDelete = !readOnly && (c.authorId === ctx.user.uid || ctx.isAdmin);
           var isAdm = U.isOfficialAdminUser(c);
+          var isVer = isAdm || U.isVerifiedUser(c);
           var cReacts = getCommentReactions(postId, c.commentId);
           var myCReact = getMyCommentReaction(postId, c.commentId);
           var myMeta = myCReact ? U.getReactionMeta(myCReact) : null;
@@ -778,13 +780,13 @@
           return (
             '<div class="comment-item">' +
             '<a href="#profile?uid=' + encodeURIComponent(c.authorId) + '">' +
-            U.renderAvatarHtml({ name: c.authorName, avatarUrl: c.authorAvatarUrl, avatarColor: c.authorAvatarColor, size: "xs", isAdmin: isAdm }) +
+            U.renderAvatarHtml({ name: c.authorName, avatarUrl: c.authorAvatarUrl, avatarColor: c.authorAvatarColor, size: "xs", isAdmin: isAdm, isVerified: isVer }) +
             "</a>" +
             '<div class="comment-bubble-wrap">' +
             '<div class="comment-bubble">' +
             '<div class="comment-bubble-top">' +
             '<a href="#profile?uid=' + encodeURIComponent(c.authorId) + '" class="comment-author">' + U.escapeHtml(c.authorName) +
-            (isAdm ? " " + U.renderAdminBadgeHtml("compact") : "") + "</a>" +
+            (isVer ? " " + U.renderVerifiedBadgeHtml(c, "compact") : "") + "</a>" +
             '<span class="comment-time">' + U.escapeHtml(U.formatRelativeTime(c.createdAt)) + "</span>" +
             "</div>" +
             '<div class="comment-text">' + U.linkifyText(c.text) + "</div>" +
@@ -886,6 +888,7 @@
         var isOwn = post.authorId === ctx.user.uid;
         var canDelete = !readOnly && (isOwn || ctx.isAdmin);
         var isAuthorAdmin = U.isOfficialAdminUser(post);
+        var isAuthorVerified = isAuthorAdmin || U.isVerifiedUser(post);
         var postReacts = reactionsByPost.get(post.postId) || [];
         var summary = summarizeReactions(postReacts);
         var totalReacts = Math.max(summary.total, post.likesCount || 0);
@@ -932,12 +935,12 @@
           '<article class="card post-card ' + (isHighlighted ? "post-card-highlight" : "") + '" data-post-card="' + U.escapeHtml(post.postId) + '">' +
           '<div class="post-header"><div class="post-author">' +
           '<a href="#profile?uid=' + encodeURIComponent(post.authorId) + '">' +
-          U.renderAvatarHtml({ name: post.authorName, avatarUrl: post.authorAvatarUrl, avatarColor: post.authorAvatarColor, size: "md", isAdmin: isAuthorAdmin }) +
+          U.renderAvatarHtml({ name: post.authorName, avatarUrl: post.authorAvatarUrl, avatarColor: post.authorAvatarColor, size: "md", isAdmin: isAuthorAdmin, isVerified: isAuthorVerified }) +
           "</a>" +
           '<div class="post-author-meta">' +
           '<div class="post-author-line">' +
           '<a href="#profile?uid=' + encodeURIComponent(post.authorId) + '" class="post-author-name">' +
-          U.escapeHtml(post.authorName) + (isAuthorAdmin ? U.renderAdminBadgeHtml("compact") : "") + "</a>" +
+          U.escapeHtml(post.authorName) + (isAuthorVerified ? U.renderVerifiedBadgeHtml(post, "compact") : "") + "</a>" +
           taggedLine +
           "</div>" +
           '<div class="post-meta-sub"><span>@' + U.escapeHtml(post.authorUsername) + "</span><span>·</span><span>" +
@@ -1481,6 +1484,7 @@
     var selectedEmbedAspect = "auto";
     var isExpanded = false;
     var isMeAdmin = U.isOfficialAdminUser(ctx.profile) || ctx.isAdmin;
+    var isMeVerified = isMeAdmin || U.isVerifiedUser(ctx.profile);
     var firstName = (ctx.profile.name || "Friend").split(" ")[0];
     var uidPrefix = "cmp_" + Math.random().toString(36).slice(2, 7);
 
@@ -1497,6 +1501,7 @@
         avatarColor: ctx.profile.avatarColor,
         size: "md",
         isAdmin: isMeAdmin,
+        isVerified: isMeVerified,
       }) +
       "</a>" +
       "</div>" +
@@ -1511,8 +1516,10 @@
         avatarColor: ctx.profile.avatarColor,
         size: "sm",
         isAdmin: isMeAdmin,
+        isVerified: isMeVerified,
       }) +
-      '<div class="fb-composer-exp-meta"><strong>' + U.escapeHtml(ctx.profile.name) + '</strong>' +
+      '<div class="fb-composer-exp-meta"><strong class="name-with-badge">' + U.escapeHtml(ctx.profile.name) +
+      (isMeVerified ? " " + U.renderVerifiedBadgeHtml(ctx.profile, "compact") : "") + "</strong>" +
       '<span>@' + U.escapeHtml(ctx.profile.username) + "</span></div></div>" +
       '<button type="button" class="icon-btn" id="' + uidPrefix + '_collapse" aria-label="Close composer">' + U.ICONS.close + "</button>" +
       "</div>" +

@@ -273,6 +273,7 @@
     var size = opts.size || "md";
     var online = opts.online;
     var isAdminAvatar = Boolean(opts.isAdmin);
+    var isVerifiedAvatar = Boolean(opts.isVerified) || isAdminAvatar;
     var safeUrl = safeAvatarUrl(avatarUrl);
     var bg = escapeHtml(avatarColor || pickAvatarColor(name || "klorix"));
     var initials = escapeHtml(getInitials(name || "KLORIX"));
@@ -289,19 +290,27 @@
         : online === false
         ? '<span class="presence-dot offline" title="Offline"></span>'
         : "";
+    var tickTitle = isAdminAvatar
+      ? "Verified Official Administrator"
+      : "Blue Verified VIP Member";
     var avatarTickHtml =
-      isAdminAvatar && (size === "xl" || size === "lg")
-        ? '<span class="avatar-blue-tick" title="Verified Official Administrator" aria-label="Verified Admin">' +
+      isVerifiedAvatar && (size === "xl" || size === "lg")
+        ? '<span class="avatar-blue-tick" title="' + tickTitle + '" aria-label="Verified">' +
           '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">' +
           '<circle cx="12" cy="12" r="11" fill="#1877F2"/>' +
           '<path d="M7.5 12.3l3 3 6-6.5" stroke="#FFFFFF" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/>' +
           "</svg></span>"
         : "";
+    var ringClass = isAdminAvatar
+      ? " avatar-admin-ring"
+      : isVerifiedAvatar
+      ? " avatar-vip-ring"
+      : "";
     return (
-      '<span class="avatar-wrap' + (isAdminAvatar ? " avatar-wrap-admin" : "") + '">' +
+      '<span class="avatar-wrap' + (isVerifiedAvatar ? " avatar-wrap-admin" : "") + '">' +
       '<span class="avatar avatar-' +
       size +
-      (isAdminAvatar ? " avatar-admin-ring" : "") +
+      ringClass +
       '" style="background:' +
       bg +
       '">' +
@@ -314,8 +323,31 @@
   }
 
   // ============================================================================
-  // OFFICIAL ADMIN BLUE VERIFIED TICK BADGE HELPERS
+  // OFFICIAL ADMIN & BLUE VERIFIED VIP BADGE HELPERS
   // ============================================================================
+  var verifiedUidSet = new Set();
+
+  function setVerifiedUid(uid, isVerified) {
+    if (!uid) return;
+    if (isVerified) verifiedUidSet.add(uid);
+    else verifiedUidSet.delete(uid);
+  }
+
+  async function syncVerifiedUsers() {
+    if (!HMM.db) return;
+    try {
+      var snap = await HMM.db
+        .collection("users")
+        .where("visibility", "==", "public")
+        .limit(120)
+        .get();
+      snap.docs.forEach(function (d) {
+        var u = d.data();
+        if (u && u.uid) setVerifiedUid(u.uid, Boolean(u.isVerified));
+      });
+    } catch (e) {}
+  }
+
   function isOfficialAdminUser(entity) {
     if (!entity) return false;
     if (entity.role === "admin" || entity.authorRole === "admin" || entity.userRole === "admin") {
@@ -328,26 +360,70 @@
     return false;
   }
 
+  function isVerifiedUser(entity) {
+    if (!entity) return false;
+    if (isOfficialAdminUser(entity)) return true;
+    if (entity.isVerified === true || entity.authorVerified === true || entity.userVerified === true) {
+      return true;
+    }
+    var targetId = entity.uid || entity.authorId || entity.userId;
+    if (targetId && verifiedUidSet.has(targetId)) return true;
+    return false;
+  }
+
+  function isVipVerifiedUser(entity) {
+    return isVerifiedUser(entity) && !isOfficialAdminUser(entity);
+  }
+
+  function canUploadCoverPhoto(profile, isAdminFlag) {
+    if (isAdminFlag) return true;
+    if (!profile) return false;
+    return isOfficialAdminUser(profile) || profile.isVerified === true;
+  }
+
+  var BLUE_TICK_SVG =
+    '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">' +
+    '<path d="M12 1.75l2.39 1.98 3.07-.37 1.16 2.86 2.86 1.16-.37 3.07L23.09 12l-1.98 2.39.37 3.07-2.86 1.16-1.16 2.86-3.07-.37L12 23.09l-2.39-1.98-3.07.37-1.16-2.86-2.86-1.16.37-3.07L.91 12l1.98-2.39-.37-3.07 2.86-1.16 1.16-2.86 3.07.37L12 1.75z" fill="#1877F2"/>' +
+    '<path d="M8.4 12.3l2.45 2.45 5.05-5.35" stroke="#FFFFFF" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"/>' +
+    "</svg>";
+
   function renderAdminBadgeHtml(variant) {
     var brandName = (siteConfigState && siteConfigState.siteName) || "KLORIX";
-    var blueTickSvg =
-      '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">' +
-      '<path d="M12 1.75l2.39 1.98 3.07-.37 1.16 2.86 2.86 1.16-.37 3.07L23.09 12l-1.98 2.39.37 3.07-2.86 1.16-1.16 2.86-3.07-.37L12 23.09l-2.39-1.98-3.07.37-1.16-2.86-2.86-1.16.37-3.07L.91 12l1.98-2.39-.37-3.07 2.86-1.16 1.16-2.86 3.07.37L12 1.75z" fill="#1877F2"/>' +
-      '<path d="M8.4 12.3l2.45 2.45 5.05-5.35" stroke="#FFFFFF" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"/>' +
-      "</svg>";
-
     if (variant === "full") {
       return (
         '<span class="admin-verified-pill" title="Verified Official ' + escapeHtml(brandName) + ' Administrator">' +
-        blueTickSvg +
+        BLUE_TICK_SVG +
         "<span>Official Admin</span></span>"
       );
     }
     return (
       '<span class="admin-verified-icon" title="Verified Official ' + escapeHtml(brandName) + ' Administrator" aria-label="Verified Admin">' +
-      blueTickSvg +
+      BLUE_TICK_SVG +
       "</span>"
     );
+  }
+
+  function renderVipBadgeHtml(variant) {
+    var brandName = (siteConfigState && siteConfigState.siteName) || "KLORIX";
+    if (variant === "full") {
+      return (
+        '<span class="vip-verified-pill" title="Blue Verified VIP Member on ' + escapeHtml(brandName) + '">' +
+        BLUE_TICK_SVG +
+        "<span>VIP Verified</span></span>"
+      );
+    }
+    return (
+      '<span class="admin-verified-icon vip-verified-icon" title="Blue Verified VIP Member" aria-label="Verified VIP">' +
+      BLUE_TICK_SVG +
+      "</span>"
+    );
+  }
+
+  function renderVerifiedBadgeHtml(entity, variant) {
+    if (!entity) return "";
+    if (isOfficialAdminUser(entity)) return renderAdminBadgeHtml(variant);
+    if (isVerifiedUser(entity)) return renderVipBadgeHtml(variant);
+    return "";
   }
 
   // ============================================================================
@@ -404,6 +480,85 @@
           resolve(out);
         };
         img.src = src;
+      };
+      reader.readAsDataURL(file);
+    });
+  }
+
+  // Fixed-aspect Profile Cover Photo compressor (exact 1200 x 450 px / 16:6 ratio)
+  // Renders 100% identically on both Mobile and PC without cropping distortion
+  var COVER_PHOTO_SPECS = {
+    width: 1200,
+    height: 450,
+    ratioLabel: "16:6 (8:3)",
+  };
+
+  function compressCoverPhotoToDataUrl(file) {
+    return new Promise(function (resolve, reject) {
+      if (!file || !file.type || file.type.indexOf("image/") !== 0) {
+        reject(new Error("Please select a valid image file (JPG, PNG, or WebP)."));
+        return;
+      }
+      if (file.size > 8 * 1024 * 1024) {
+        reject(new Error("Cover photo is too large. Please choose an image under 8 MB."));
+        return;
+      }
+      var reader = new FileReader();
+      reader.onerror = function () {
+        reject(new Error("Could not read the selected cover photo."));
+      };
+      reader.onload = function (ev) {
+        var img = new Image();
+        img.onerror = function () {
+          reject(new Error("Selected file could not be decoded as an image."));
+        };
+        img.onload = function () {
+          var targetW = COVER_PHOTO_SPECS.width;
+          var targetH = COVER_PHOTO_SPECS.height;
+          var targetRatio = targetW / targetH;
+          var srcW = img.width || targetW;
+          var srcH = img.height || targetH;
+          var srcRatio = srcW / srcH;
+
+          var cropX = 0;
+          var cropY = 0;
+          var cropW = srcW;
+          var cropH = srcH;
+
+          if (srcRatio > targetRatio) {
+            // Wider than 16:6 -> center crop horizontally
+            cropW = srcH * targetRatio;
+            cropX = (srcW - cropW) / 2;
+          } else if (srcRatio < targetRatio) {
+            // Taller than 16:6 -> center crop vertically
+            cropH = srcW / targetRatio;
+            cropY = (srcH - cropH) / 2;
+          }
+
+          var canvas = document.createElement("canvas");
+          canvas.width = targetW;
+          canvas.height = targetH;
+          var ctx2d = canvas.getContext("2d");
+          ctx2d.fillStyle = "#0B0F0E";
+          ctx2d.fillRect(0, 0, targetW, targetH);
+          ctx2d.drawImage(img, cropX, cropY, cropW, cropH, 0, 0, targetW, targetH);
+
+          var maxLen = 310000;
+          var out = canvas.toDataURL("image/jpeg", 0.84);
+          if (out.length > maxLen) out = canvas.toDataURL("image/jpeg", 0.74);
+          if (out.length > maxLen) out = canvas.toDataURL("image/jpeg", 0.62);
+          if (out.length > maxLen) {
+            canvas.width = 960;
+            canvas.height = 360;
+            ctx2d = canvas.getContext("2d");
+            ctx2d.fillStyle = "#0B0F0E";
+            ctx2d.fillRect(0, 0, 960, 360);
+            ctx2d.drawImage(img, cropX, cropY, cropW, cropH, 0, 0, 960, 360);
+            out = canvas.toDataURL("image/jpeg", 0.72);
+          }
+          resolve(out);
+        };
+        img.src = ev.target.result;
       };
       reader.readAsDataURL(file);
     });
@@ -1314,11 +1469,12 @@
       menu.innerHTML = activeItems
         .map(function (u, idx) {
           var isAdm = isOfficialAdminUser(u);
+          var isVer = isVerifiedUser(u);
           return (
             '<button type="button" class="mention-option ' + (idx === selectedIdx ? "active" : "") + '" data-midx="' + idx + '">' +
-            renderAvatarHtml({ name: u.name, avatarUrl: u.avatarUrl, avatarColor: u.avatarColor, size: "xs", isAdmin: isAdm }) +
+            renderAvatarHtml({ name: u.name, avatarUrl: u.avatarUrl, avatarColor: u.avatarColor, size: "xs", isAdmin: isAdm, isVerified: isVer }) +
             '<span class="mention-option-meta"><span class="mention-option-name">' + escapeHtml(u.name) +
-            (isAdm ? " " + renderAdminBadgeHtml("compact") : "") + "</span>" +
+            (isVer ? " " + renderVerifiedBadgeHtml(u, "compact") : "") + "</span>" +
             '<span class="mention-option-handle">@' + escapeHtml(u.username) + "</span></span></button>"
           );
         })
@@ -2133,6 +2289,31 @@
     }
   }
 
+  var NOTIF_SEEN_KEY_PREFIX = "klorix_notif_seen_at_";
+
+  function getNotificationsSeenAt(uid) {
+    if (!uid) return 0;
+    try {
+      var raw = localStorage.getItem(NOTIF_SEEN_KEY_PREFIX + uid);
+      var num = Number(raw);
+      return isNaN(num) ? 0 : num;
+    } catch (e) {
+      return 0;
+    }
+  }
+
+  function markNotificationsOpened(uid, latestCreatedMs) {
+    if (!uid) return;
+    var prev = getNotificationsSeenAt(uid);
+    var next = Math.max(prev, Date.now(), Number(latestCreatedMs) || 0);
+    try {
+      localStorage.setItem(NOTIF_SEEN_KEY_PREFIX + uid, String(next));
+    } catch (e) {}
+    try {
+      window.dispatchEvent(new CustomEvent("hmm:notifs-seen", { detail: { uid: uid, seenAt: next } }));
+    } catch (e) {}
+  }
+
   // Theme Manager
   var THEME_KEY = "hmm_theme";
 
@@ -2402,8 +2583,17 @@
     getInitials: getInitials,
     renderAvatarHtml: renderAvatarHtml,
     isOfficialAdminUser: isOfficialAdminUser,
+    isVerifiedUser: isVerifiedUser,
+    isVipVerifiedUser: isVipVerifiedUser,
+    canUploadCoverPhoto: canUploadCoverPhoto,
+    setVerifiedUid: setVerifiedUid,
+    syncVerifiedUsers: syncVerifiedUsers,
     renderAdminBadgeHtml: renderAdminBadgeHtml,
+    renderVipBadgeHtml: renderVipBadgeHtml,
+    renderVerifiedBadgeHtml: renderVerifiedBadgeHtml,
+    COVER_PHOTO_SPECS: COVER_PHOTO_SPECS,
     compressImageFileToDataUrl: compressImageFileToDataUrl,
+    compressCoverPhotoToDataUrl: compressCoverPhotoToDataUrl,
     extractUrls: extractUrls,
     extractMentions: extractMentions,
     extractHashtags: extractHashtags,
@@ -2436,6 +2626,8 @@
     isFileProtocol: isFileProtocol,
     getFriendlyErrorMessage: getFriendlyErrorMessage,
     createNotificationRecord: createNotificationRecord,
+    getNotificationsSeenAt: getNotificationsSeenAt,
+    markNotificationsOpened: markNotificationsOpened,
     getCurrentTheme: getCurrentTheme,
     applyTheme: applyTheme,
     toggleTheme: toggleTheme,

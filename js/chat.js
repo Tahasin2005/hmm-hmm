@@ -354,6 +354,7 @@
               ? c.lastSenderName.split(" ")[0] + ": "
               : "";
 
+          var otherVerified = !isGroup && c.otherUid && U.isVerifiedUser({ uid: c.otherUid });
           return (
             '<button type="button" class="chat-thread-item ' + (isActive ? "active" : "") +
             '" data-open-chat="' + U.escapeHtml(c.chatId) + '" data-chat-type="' + (isGroup ? "group" : "direct") +
@@ -364,9 +365,11 @@
               avatarColor: avatarColor,
               size: "md",
               online: isGroup || isBlocked ? undefined : p ? p.online : false,
+              isVerified: otherVerified,
             }) +
             '<div class="chat-thread-meta"><div class="chat-thread-top">' +
-            '<span class="chat-thread-name">' + U.escapeHtml(displayName) +
+            '<span class="chat-thread-name name-with-badge">' + U.escapeHtml(displayName) +
+            (otherVerified ? " " + U.renderVerifiedBadgeHtml({ uid: c.otherUid }, "compact") : "") +
             (isGroup ? ' <span class="chat-group-tag">Group</span>' : "") +
             (isBlocked ? ' <span class="chat-blocked-tag">Blocked</span>' : "") + "</span>" +
             '<span class="chat-thread-time">' + U.escapeHtml(U.formatRelativeTime(c.lastMessageTime)) + "</span></div>" +
@@ -545,16 +548,17 @@
       detachActiveListeners();
 
       var isAdm = U.isOfficialAdminUser(recipientProfile);
+      var isVer = isAdm || U.isVerifiedUser(recipientProfile);
       var iBlocked = HMM.blocks && HMM.blocks.isBlockedByMe(recipientProfile.uid);
 
       mainPaneEl.innerHTML =
         '<div class="chat-main-header"><div class="chat-main-user">' +
         '<button type="button" class="icon-btn chat-back-btn" id="chat-mobile-back" aria-label="Back to chats">' + U.ICONS.back + "</button>" +
         '<a href="#profile?uid=' + encodeURIComponent(recipientProfile.uid) + '">' +
-        U.renderAvatarHtml({ name: recipientProfile.name, avatarUrl: recipientProfile.avatarUrl, avatarColor: recipientProfile.avatarColor, size: "sm", isAdmin: isAdm }) +
+        U.renderAvatarHtml({ name: recipientProfile.name, avatarUrl: recipientProfile.avatarUrl, avatarColor: recipientProfile.avatarColor, size: "sm", isAdmin: isAdm, isVerified: isVer }) +
         '</a><div style="min-width:0;">' +
-        '<a href="#profile?uid=' + encodeURIComponent(recipientProfile.uid) + '" class="user-row-name">' +
-        U.escapeHtml(recipientProfile.name) + (isAdm ? " " + U.renderAdminBadgeHtml("compact") : "") + "</a>" +
+        '<a href="#profile?uid=' + encodeURIComponent(recipientProfile.uid) + '" class="user-row-name name-with-badge">' +
+        U.escapeHtml(recipientProfile.name) + (isVer ? " " + U.renderVerifiedBadgeHtml(recipientProfile, "compact") : "") + "</a>" +
         '<div id="chat-active-presence" style="font-size:12px;color:var(--text-muted);">Checking status...</div></div></div>' +
         '<div class="chat-main-actions">' +
         '<button type="button" id="btn-chat-block-toggle" class="btn ' + (iBlocked ? "btn-secondary" : "btn-danger-soft") + ' btn-sm">' +
@@ -933,11 +937,12 @@
             resultsEl.innerHTML = clean
               .map(function (u) {
                 var isAdm = U.isOfficialAdminUser(u);
+                var isVer = isAdm || U.isVerifiedUser(u);
                 return (
                   '<div class="user-row"><div class="user-row-left">' +
-                  U.renderAvatarHtml({ name: u.name, avatarUrl: u.avatarUrl, avatarColor: u.avatarColor, size: "sm", isAdmin: isAdm }) +
-                  '<div class="user-row-meta"><span class="user-row-name">' + U.escapeHtml(u.name) +
-                  (isAdm ? " " + U.renderAdminBadgeHtml("compact") : "") + "</span>" +
+                  U.renderAvatarHtml({ name: u.name, avatarUrl: u.avatarUrl, avatarColor: u.avatarColor, size: "sm", isAdmin: isAdm, isVerified: isVer }) +
+                  '<div class="user-row-meta"><span class="user-row-name name-with-badge">' + U.escapeHtml(u.name) +
+                  (isVer ? " " + U.renderVerifiedBadgeHtml(u, "compact") : "") + "</span>" +
                   '<span class="user-row-handle">@' + U.escapeHtml(u.username) + "</span></div></div>" +
                   '<button type="button" class="btn btn-primary btn-sm" data-pick-uid="' + U.escapeHtml(u.uid) + '">Chat</button></div>'
                 );

@@ -155,7 +155,10 @@
   async function getUserProfile(uid) {
     if (!uid) return null;
     var snap = await HMM.db.collection("users").doc(uid).get();
-    return snap.exists ? snap.data() : null;
+    if (!snap.exists) return null;
+    var data = snap.data();
+    if (data && data.uid) U.setVerifiedUid(data.uid, Boolean(data.isVerified));
+    return data;
   }
 
   async function getUserByUsername(username) {
@@ -313,7 +316,7 @@
     return getUserProfile(uid);
   }
 
-  async function updateAdminCoverPhoto(uid, coverPhotoUrl) {
+  async function updateUserCoverPhoto(uid, coverPhotoUrl) {
     var clean = String(coverPhotoUrl || "").trim();
     if (clean) {
       var err = U.validateOptionalUrl(clean);
@@ -324,6 +327,16 @@
       coverPhotoUrl: clean,
       updatedAt: HMM.serverTimestamp(),
     });
+    return getUserProfile(uid);
+  }
+
+  async function setUserVerified(uid, isVerified) {
+    var nextVal = Boolean(isVerified);
+    await HMM.db.collection("users").doc(uid).update({
+      isVerified: nextVal,
+      updatedAt: HMM.serverTimestamp(),
+    });
+    U.setVerifiedUid(uid, nextVal);
     return getUserProfile(uid);
   }
 
@@ -348,7 +361,11 @@
       .limit(40)
       .get();
     return snap.docs
-      .map(function (d) { return d.data(); })
+      .map(function (d) {
+        var u = d.data();
+        if (u && u.uid) U.setVerifiedUid(u.uid, Boolean(u.isVerified));
+        return u;
+      })
       .filter(function (u) {
         if (u.uid === excludeUid || u.isSuspended) return false;
         if (HMM.blocks && HMM.blocks.isEitherBlocked(u.uid)) return false;
@@ -368,7 +385,11 @@
       .get();
     var normalizedHandle = term.replace(/^@/, "");
     return snap.docs
-      .map(function (d) { return d.data(); })
+      .map(function (d) {
+        var u = d.data();
+        if (u && u.uid) U.setVerifiedUid(u.uid, Boolean(u.isVerified));
+        return u;
+      })
       .filter(function (u) {
         if (excludeUid && u.uid === excludeUid) return false;
         if (u.isSuspended) return false;
@@ -395,7 +416,10 @@
       unique.map(async function (uid) {
         try {
           var snap = await HMM.db.collection("users").doc(uid).get();
-          return snap.exists ? snap.data() : null;
+          if (!snap.exists) return null;
+          var u = snap.data();
+          if (u && u.uid) U.setVerifiedUid(u.uid, Boolean(u.isVerified));
+          return u;
         } catch (e) {
           return null;
         }
@@ -658,7 +682,9 @@
     generateDefaultUsername: generateDefaultUsername,
     createUserProfile: createUserProfile,
     updateUserProfile: updateUserProfile,
-    updateAdminCoverPhoto: updateAdminCoverPhoto,
+    updateUserCoverPhoto: updateUserCoverPhoto,
+    updateAdminCoverPhoto: updateUserCoverPhoto,
+    setUserVerified: setUserVerified,
     updateUserAvatarUrl: updateUserAvatarUrl,
     getSuggestedUsers: getSuggestedUsers,
     searchUsers: searchUsers,

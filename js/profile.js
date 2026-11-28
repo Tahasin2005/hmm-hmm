@@ -1,7 +1,10 @@
 /**
- * KLORIX (window.HMM) — User Profile View Controller (#profile?uid= or #profile?u=)
+ * KLORIX (window.HMM) — Facebook-Style User Profile View Controller (#profile?uid= or #profile?u=)
  * Includes:
- * - Official Administrator Profile badge & direct "Post Official Announcement" composer/manager
+ * - Official Administrator & Blue Verified VIP profile badges & VIP styling
+ * - VIP-Exclusive Fixed-Size Cover Photo (1200 x 450 px, 16:6 ratio — identical on Mobile & PC)
+ * - Facebook-style overlapping avatar with 1-tap camera upload, Posts / About tabs & Intro card
+ * - Official Admin "Post Official Announcement" manager
  * - Two-Way User Block / Unblock controls + isolation state screens
  * Classic script (works directly via file://, Vercel, and cPanel).
  */
@@ -49,10 +52,13 @@
     var userPosts = [];
     var postsLoaded = false;
     var adminAnnouncements = [];
+    var activeProfileTab = "posts"; // 'posts' | 'about'
 
     ctx.mainEl.innerHTML =
       '<section class="card profile-card" id="profile-header-card"></section>' +
       '<div id="profile-admin-announcements-slot"></div>' +
+      '<div id="profile-intro-slot"></div>' +
+      '<div id="profile-about-slot" class="hidden"></div>' +
       (isOwnProfile ? '<div id="profile-composer-slot"></div>' : "") +
       '<div id="profile-posts-section">' +
       '<div class="page-header">' +
@@ -64,6 +70,8 @@
     var postsSection = document.getElementById("profile-posts-section");
     var postsContainer = document.getElementById("profile-posts-container");
     var adminAnnSlot = document.getElementById("profile-admin-announcements-slot");
+    var introSlot = document.getElementById("profile-intro-slot");
+    var aboutSlot = document.getElementById("profile-about-slot");
     var profileComposerSlot = document.getElementById("profile-composer-slot");
     var profileComposerCtrl = null;
 
@@ -90,8 +98,162 @@
       },
     });
 
+    function getWorkLabel() {
+      if (targetProfile.jobTitle && targetProfile.workplace) {
+        return (
+          "<strong>" +
+          U.escapeHtml(targetProfile.jobTitle) +
+          "</strong> at <strong>" +
+          U.escapeHtml(targetProfile.workplace) +
+          "</strong>"
+        );
+      }
+      if (targetProfile.jobTitle) {
+        return "<strong>" + U.escapeHtml(targetProfile.jobTitle) + "</strong>";
+      }
+      if (targetProfile.workplace) {
+        return "Works at <strong>" + U.escapeHtml(targetProfile.workplace) + "</strong>";
+      }
+      return "";
+    }
+
+    function renderSocialLinksHtml() {
+      var socialLinks = U.sanitizeSocialLinks(targetProfile.socialLinks || []);
+      if (socialLinks.length === 0) return "";
+      return (
+        '<div class="profile-social-row">' +
+        socialLinks
+          .map(function (item) {
+            var meta = U.SOCIAL_PLATFORM_MAP[item.platform];
+            if (!meta) return "";
+            return (
+              '<a href="' +
+              U.escapeHtml(item.url) +
+              '" target="_blank" rel="noopener noreferrer" class="profile-social-chip" style="--social-color:' +
+              meta.color +
+              '" title="' +
+              U.escapeHtml(meta.label) +
+              '">' +
+              '<span class="profile-social-icon">' +
+              meta.icon +
+              "</span>" +
+              "<span>" +
+              U.escapeHtml(meta.label) +
+              "</span></a>"
+            );
+          })
+          .join("") +
+        "</div>"
+      );
+    }
+
+    function renderIntroAndAbout(isProfileAdmin, isProfileVip, isBlocked) {
+      if (!introSlot || !aboutSlot) return;
+      if (isBlocked) {
+        introSlot.innerHTML = "";
+        aboutSlot.innerHTML = "";
+        aboutSlot.classList.add("hidden");
+        if (profileComposerSlot) profileComposerSlot.classList.add("hidden");
+        return;
+      }
+
+      var workLabel = getWorkLabel();
+      var formattedDob = U.formatBirthDate(targetProfile.birthDate);
+      var socialLinksHtml = renderSocialLinksHtml();
+      var siteName = HMM.siteConfig.get().siteName;
+
+      var statusBannerHtml = isProfileAdmin
+        ? '<div class="admin-profile-banner">' +
+          '<div class="admin-profile-banner-icon">' + U.renderAdminBadgeHtml("compact") + "</div>" +
+          '<div class="admin-profile-banner-text">' +
+          "<strong>Official " + U.escapeHtml(siteName) + " Administrator</strong>" +
+          "<span>Verified platform leadership · Community safety &amp; governance</span>" +
+          "</div></div>"
+        : isProfileVip
+        ? '<div class="vip-profile-banner">' +
+          '<div class="vip-profile-banner-icon">' + U.renderVipBadgeHtml("compact") + "</div>" +
+          '<div class="vip-profile-banner-text">' +
+          "<strong>Blue Verified VIP Profile</strong>" +
+          "<span>Verified authentic member on " + U.escapeHtml(siteName) + " · VIP Cover Photo unlocked</span>" +
+          "</div></div>"
+        : "";
+
+      var detailRowsHtml =
+        '<div class="profile-intro-list">' +
+        (workLabel
+          ? '<div class="profile-intro-row">' + U.ICONS.briefcase + "<span>" + workLabel + "</span></div>"
+          : "") +
+        (targetProfile.location
+          ? '<div class="profile-intro-row">' + U.ICONS.mapPin + "<span>Lives in <strong>" + U.escapeHtml(targetProfile.location) + "</strong></span></div>"
+          : "") +
+        (formattedDob
+          ? '<div class="profile-intro-row">' + U.ICONS.cake + "<span>Born <strong>" + U.escapeHtml(formattedDob) + "</strong></span></div>"
+          : "") +
+        '<div class="profile-intro-row">' + U.ICONS.calendar + "<span>Joined " + U.escapeHtml(U.formatJoinDate(targetProfile.createdAt)) + "</span></div>" +
+        "</div>";
+
+      // Intro card (shown on Posts tab — Facebook style)
+      introSlot.innerHTML =
+        '<section class="card profile-intro-card">' +
+        '<div class="profile-intro-head"><h2>Intro</h2>' +
+        (isOwnProfile
+          ? '<button type="button" class="btn btn-ghost btn-sm" id="btn-intro-edit">Edit details</button>'
+          : "") +
+        "</div>" +
+        statusBannerHtml +
+        (targetProfile.bio
+          ? '<p class="profile-bio">' + U.linkifyText(targetProfile.bio) + "</p>"
+          : isOwnProfile
+          ? '<p class="text-muted" style="font-size:13.5px;margin-top:6px;">Add a short bio to tell people more about yourself.</p>'
+          : "") +
+        detailRowsHtml +
+        socialLinksHtml +
+        "</section>";
+
+      var introEditBtn = document.getElementById("btn-intro-edit");
+      if (introEditBtn) introEditBtn.addEventListener("click", openEditProfileModal);
+
+      // About tab full card
+      aboutSlot.innerHTML =
+        '<section class="card profile-intro-card">' +
+        '<div class="profile-intro-head"><h2>About ' + U.escapeHtml(targetProfile.name) + "</h2>" +
+        (isOwnProfile
+          ? '<button type="button" class="btn btn-secondary btn-sm" id="btn-about-edit">' + U.ICONS.edit + " Edit profile</button>"
+          : "") +
+        "</div>" +
+        statusBannerHtml +
+        (targetProfile.bio
+          ? '<div class="profile-about-block"><div class="profile-about-label">Bio</div><p class="profile-bio" style="margin-top:4px;">' + U.linkifyText(targetProfile.bio) + "</p></div>"
+          : "") +
+        '<div class="profile-about-block"><div class="profile-about-label">Overview</div>' +
+        detailRowsHtml +
+        "</div>" +
+        (socialLinksHtml
+          ? '<div class="profile-about-block"><div class="profile-about-label">Social Media Links</div>' + socialLinksHtml + "</div>"
+          : "") +
+        '<div class="profile-stats">' +
+        '<div class="profile-stat"><strong>' + (targetProfile.postsCount || 0) + "</strong><span>Posts</span></div>" +
+        '<div class="profile-stat"><strong>' + (targetProfile.friendsCount || 0) + "</strong><span>Friends</span></div>" +
+        '<div class="profile-stat"><strong>' + (targetProfile.followersCount || 0) + "</strong><span>Followers</span></div>" +
+        '<div class="profile-stat"><strong>' + (targetProfile.followingCount || 0) + "</strong><span>Following</span></div>" +
+        "</div></section>";
+
+      var aboutEditBtn = document.getElementById("btn-about-edit");
+      if (aboutEditBtn) aboutEditBtn.addEventListener("click", openEditProfileModal);
+
+      var showAbout = activeProfileTab === "about";
+      introSlot.classList.toggle("hidden", showAbout);
+      aboutSlot.classList.toggle("hidden", !showAbout);
+      if (profileComposerSlot) profileComposerSlot.classList.toggle("hidden", showAbout);
+      postsSection.classList.toggle("hidden", showAbout);
+    }
+
     function renderProfilePosts() {
       if (!isOwnProfile && HMM.blocks && HMM.blocks.isEitherBlocked(targetProfile.uid)) {
+        postsSection.classList.add("hidden");
+        return;
+      }
+      if (activeProfileTab === "about") {
         postsSection.classList.add("hidden");
         return;
       }
@@ -102,7 +264,7 @@
       postManager.render(
         userPosts,
         "No posts yet",
-        isOwnProfile ? "Share your first post from the Home Feed." : "This user hasn't shared any posts yet."
+        isOwnProfile ? "Share your first post right here or from the Home Feed." : "This user hasn't shared any posts yet."
       );
     }
 
@@ -265,26 +427,34 @@
       var draftAvatarUrl = targetProfile.avatarUrl || googlePhotoUrl || "";
       var draftCoverUrl = targetProfile.coverPhotoUrl || "";
       var draftSocialLinks = U.sanitizeSocialLinks(targetProfile.socialLinks || []).slice();
+      var canUploadCover = U.canUploadCoverPhoto(targetProfile, ctx.isAdmin);
+      var isProfileVerified = ctx.isAdmin || U.isVerifiedUser(targetProfile);
+      var coverSpecs = U.COVER_PHOTO_SPECS || { width: 1200, height: 450, ratioLabel: "16:6 (8:3)" };
 
       var platformOptionsHtml = U.SOCIAL_PLATFORMS.map(function (sp) {
         return '<option value="' + U.escapeHtml(sp.id) + '">' + U.escapeHtml(sp.label) + "</option>";
       }).join("");
 
-      var coverSectionHtml = ctx.isAdmin
+      var coverSectionHtml = canUploadCover
         ? '<div class="ep-section">' +
-          '<div class="ep-section-title">' + U.ICONS.camera + " Official Admin Cover Photo</div>" +
+          '<div class="ep-section-title">' + U.ICONS.camera + " " +
+          (ctx.isAdmin ? "Official Admin Cover Photo" : "VIP Verified Cover Photo") +
+          "</div>" +
           '<div class="ep-cover-preview" id="ep-cover-preview" ' +
           (U.safeAvatarUrl(draftCoverUrl) ? 'style="background-image:url(\'' + U.escapeHtml(U.safeAvatarUrl(draftCoverUrl)) + '\')"' : "") +
           ">" +
-          (U.safeAvatarUrl(draftCoverUrl) ? "" : "<span>Default Admin Banner</span>") +
+          (U.safeAvatarUrl(draftCoverUrl) ? "" : "<span>Default " + (ctx.isAdmin ? "Admin" : "VIP") + " Banner (" + coverSpecs.width + " × " + coverSpecs.height + " px)</span>") +
           "</div>" +
           '<div class="ep-photo-actions">' +
-          '<label class="btn btn-secondary btn-sm" for="ep-cover-file">' + U.ICONS.upload + " Upload Cover Photo</label>" +
+          '<label class="btn btn-primary btn-sm" for="ep-cover-file">' + U.ICONS.upload + " Upload Cover Photo</label>" +
           '<input id="ep-cover-file" type="file" accept="image/*" class="hidden" />' +
           '<button type="button" id="ep-cover-remove" class="btn btn-ghost btn-sm' + (draftCoverUrl ? "" : " hidden") + '">Remove Cover</button>' +
           "</div>" +
-          '<span class="form-hint">Recommended wide banner (automatically compressed for fast loading).</span></div>'
-        : "";
+          '<span class="form-hint">Exact size: <strong>' + coverSpecs.width + " × " + coverSpecs.height + " px (" + coverSpecs.ratioLabel + ")</strong> — displays identically on Mobile &amp; PC without distortion.</span></div>"
+        : '<div class="ep-section ep-cover-locked">' +
+          '<div class="ep-section-title">' + U.renderVipBadgeHtml("compact") + " Cover Photo (VIP Exclusive)</div>" +
+          '<p class="form-hint">Custom Cover Photos (<strong>' + coverSpecs.width + " × " + coverSpecs.height + " px</strong>) are exclusive to <strong>Blue Verified VIP</strong> profiles. Once an Admin verifies your account, Cover Photo upload unlocks automatically.</p>" +
+          "</div>";
 
       U.openModal(
         "Edit profile",
@@ -299,6 +469,7 @@
             avatarColor: targetProfile.avatarColor,
             size: "lg",
             isAdmin: ctx.isAdmin,
+            isVerified: isProfileVerified,
           }) +
           "</div>" +
           '<div class="ep-photo-controls">' +
@@ -371,6 +542,7 @@
                 avatarColor: targetProfile.avatarColor,
                 size: "lg",
                 isAdmin: ctx.isAdmin,
+                isVerified: isProfileVerified,
               });
             }
             var st = body.querySelector("#ep-avatar-status");
@@ -385,7 +557,7 @@
               try {
                 refreshAvatarPreview("Compressing image...");
                 draftAvatarUrl = await U.compressImageFileToDataUrl(file, 240, 0.78, 95000);
-                refreshAvatarPreview("Low-resolution profile photo uploaded. Click Save changes to apply.");
+                refreshAvatarPreview("Profile photo ready. Click Save changes to apply.");
               } catch (err) {
                 U.showToast(err.message || "Could not process image.", "error");
                 refreshAvatarPreview("Could not process image. Try another photo.");
@@ -405,27 +577,28 @@
           var coverFileEl = body.querySelector("#ep-cover-file");
           var coverPreviewEl = body.querySelector("#ep-cover-preview");
           var coverRemoveBtn = body.querySelector("#ep-cover-remove");
-          if (coverFileEl && coverPreviewEl) {
+          if (coverFileEl && coverPreviewEl && canUploadCover) {
             coverFileEl.addEventListener("change", async function () {
               var file = coverFileEl.files && coverFileEl.files[0];
               if (!file) return;
               try {
-                draftCoverUrl = await U.compressImageFileToDataUrl(file, 1200, 0.8, 300000);
+                draftCoverUrl = await U.compressCoverPhotoToDataUrl(file);
                 coverPreviewEl.style.backgroundImage = "url('" + draftCoverUrl + "')";
                 coverPreviewEl.innerHTML = "";
                 if (coverRemoveBtn) coverRemoveBtn.classList.remove("hidden");
-                U.showToast("Cover photo ready! Click Save changes.", "success");
+                U.showToast("Cover photo cropped to 1200 × 450 px! Click Save changes.", "success");
               } catch (err) {
                 U.showToast(err.message || "Could not process cover photo.", "error");
               }
               coverFileEl.value = "";
             });
           }
-          if (coverRemoveBtn && coverPreviewEl) {
+          if (coverRemoveBtn && coverPreviewEl && canUploadCover) {
             coverRemoveBtn.addEventListener("click", function () {
               draftCoverUrl = "";
               coverPreviewEl.style.backgroundImage = "";
-              coverPreviewEl.innerHTML = "<span>Default Admin Banner</span>";
+              coverPreviewEl.innerHTML =
+                "<span>Default " + (ctx.isAdmin ? "Admin" : "VIP") + " Banner (" + coverSpecs.width + " × " + coverSpecs.height + " px)</span>";
               coverRemoveBtn.classList.add("hidden");
             });
           }
@@ -500,7 +673,6 @@
             saveBtn.disabled = true;
             saveBtn.textContent = "Saving...";
             try {
-              // Auto-capture any typed-but-not-yet-clicked social link
               if (socialUrlInput && socialUrlInput.value.trim()) {
                 var pendingUrl = U.normalizeSocialUrl(socialUrlInput.value);
                 if (pendingUrl && draftSocialLinks.length < 10) {
@@ -526,7 +698,7 @@
                 visibility: targetProfile.visibility,
                 friendRequestPref: targetProfile.friendRequestPref,
               };
-              if (ctx.isAdmin) {
+              if (canUploadCover) {
                 updateArgs.coverPhotoUrl = draftCoverUrl;
               }
               var updated = await HMM.authService.updateUserProfile(updateArgs);
@@ -560,6 +732,7 @@
           "<h3>This profile is unavailable</h3>" +
           "<p>You don't have access to view this member's profile or posts.</p>" +
           '<a href="#feed" class="btn btn-primary btn-sm">Back to Home Feed</a></div>';
+        renderIntroAndAbout(false, false, true);
         renderProfilePosts();
         return;
       }
@@ -574,12 +747,18 @@
           '<div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap;">' +
           '<button type="button" class="btn btn-primary btn-sm" data-paction="unblock">Unblock User</button>' +
           '<a href="#feed" class="btn btn-secondary btn-sm">Back to Home Feed</a></div></div>';
+        renderIntroAndAbout(false, false, true);
         renderProfilePosts();
         return;
       }
 
       var isProfileAdmin = U.isOfficialAdminUser(targetProfile) || (isOwnProfile && ctx.isAdmin);
+      var isProfileVip = !isProfileAdmin && U.isVipVerifiedUser(targetProfile);
+      var isProfileVerified = isProfileAdmin || isProfileVip;
+      var canUploadCover = isOwnProfile && U.canUploadCoverPhoto(targetProfile, ctx.isAdmin);
+
       card.classList.toggle("profile-card-admin", isProfileAdmin);
+      card.classList.toggle("profile-card-vip", isProfileVip);
 
       var shareBtnHtml =
         '<button type="button" class="btn btn-secondary btn-sm" id="btn-share-profile" title="Share profile link">' +
@@ -636,66 +815,55 @@
             : "");
       }
 
-      var adminExecutiveStrip = isProfileAdmin
-        ? '<div class="admin-profile-banner">' +
-          '<div class="admin-profile-banner-icon">' + U.renderAdminBadgeHtml("compact") + "</div>" +
-          '<div class="admin-profile-banner-text">' +
-          "<strong>Official " + U.escapeHtml(HMM.siteConfig.get().siteName) + " Administrator</strong>" +
-          "<span>Verified platform leadership · Community safety &amp; governance</span>" +
-          "</div></div>"
+      // Only VIP Verified users and Official Admin display custom cover photos
+      var safeCover = isProfileVerified ? U.safeAvatarUrl(targetProfile.coverPhotoUrl || "") : "";
+      var coverControlsHtml = canUploadCover
+        ? '<div class="profile-cover-controls">' +
+          '<label class="profile-cover-btn" for="quick-cover-upload" title="Upload 1200 × 450 px (16:6) cover photo">' +
+          U.ICONS.camera + " <span>" + (safeCover ? "Edit cover" : "Add cover photo") + "</span></label>" +
+          '<input id="quick-cover-upload" type="file" accept="image/*" class="hidden" />' +
+          (safeCover
+            ? '<button type="button" class="profile-cover-btn profile-cover-btn-del" id="quick-cover-remove" title="Remove cover photo">' + U.ICONS.trash + "</button>"
+            : "") +
+          "</div>"
         : "";
 
-      var safeCover = U.safeAvatarUrl(targetProfile.coverPhotoUrl || "");
-      var coverControlsHtml =
-        isOwnProfile && ctx.isAdmin
-          ? '<div class="profile-cover-controls">' +
-            '<label class="profile-cover-btn" for="quick-cover-upload">' + U.ICONS.camera + " " + (safeCover ? "Change Cover" : "Add Cover Photo") + "</label>" +
-            '<input id="quick-cover-upload" type="file" accept="image/*" class="hidden" />' +
-            (safeCover ? '<button type="button" class="profile-cover-btn profile-cover-btn-del" id="quick-cover-remove" title="Remove cover photo">' + U.ICONS.trash + "</button>" : "") +
-            "</div>"
-          : "";
-
-      // Work / Position display
-      var workLabel = "";
-      if (targetProfile.jobTitle && targetProfile.workplace) {
-        workLabel = "<strong>" + U.escapeHtml(targetProfile.jobTitle) + "</strong> at <strong>" + U.escapeHtml(targetProfile.workplace) + "</strong>";
-      } else if (targetProfile.jobTitle) {
-        workLabel = "<strong>" + U.escapeHtml(targetProfile.jobTitle) + "</strong>";
-      } else if (targetProfile.workplace) {
-        workLabel = "Works at <strong>" + U.escapeHtml(targetProfile.workplace) + "</strong>";
-      }
-
-      var formattedDob = U.formatBirthDate(targetProfile.birthDate);
-      var socialLinks = U.sanitizeSocialLinks(targetProfile.socialLinks || []);
-      var socialLinksHtml =
-        socialLinks.length > 0
-          ? '<div class="profile-social-row">' +
-            socialLinks
-              .map(function (item) {
-                var meta = U.SOCIAL_PLATFORM_MAP[item.platform];
-                if (!meta) return "";
-                return (
-                  '<a href="' + U.escapeHtml(item.url) + '" target="_blank" rel="noopener noreferrer" class="profile-social-chip" style="--social-color:' + meta.color + '" title="' + U.escapeHtml(meta.label) + '">' +
-                  '<span class="profile-social-icon">' + meta.icon + "</span>" +
-                  "<span>" + U.escapeHtml(meta.label) + "</span></a>"
-                );
-              })
-              .join("") +
-            "</div>"
-          : "";
+      var coverEmblemHtml = isProfileAdmin
+        ? '<div class="profile-cover-emblem">' + U.renderAdminBadgeHtml("compact") + " Official Admin</div>"
+        : isProfileVip
+        ? '<div class="profile-cover-emblem profile-cover-emblem-vip">' + U.renderVipBadgeHtml("compact") + " VIP Verified</div>"
+        : "";
 
       var displayAvatarUrl =
         targetProfile.avatarUrl || (isOwnProfile ? U.getGoogleAccountPhotoUrl(ctx.user) : "");
 
+      var quickAvatarBtnHtml = isOwnProfile
+        ? '<label class="profile-avatar-cam-btn" for="quick-avatar-upload" title="Update profile picture" aria-label="Update profile picture">' +
+          U.ICONS.camera +
+          '</label><input id="quick-avatar-upload" type="file" accept="image/*" class="hidden" />'
+        : "";
+
+      var coverClasses =
+        "profile-cover" +
+        (isProfileAdmin ? " profile-cover-admin" : isProfileVip ? " profile-cover-vip" : "") +
+        (safeCover ? " has-cover-photo" : "");
+
+      var avatarRingClass =
+        "profile-avatar-ring" +
+        (isProfileAdmin ? " profile-avatar-ring-admin" : isProfileVip ? " profile-avatar-ring-vip" : "");
+
       card.innerHTML =
-        '<div class="profile-cover ' + (isProfileAdmin ? "profile-cover-admin" : "") + (safeCover ? " has-cover-photo" : "") + '">' +
+        '<div class="' + coverClasses + '">' +
         (safeCover
           ? '<img src="' + U.escapeHtml(safeCover) + '" alt="Cover photo" class="profile-cover-img" id="profile-cover-img" />'
           : "") +
-        (isProfileAdmin ? '<div class="profile-cover-emblem">' + U.renderAdminBadgeHtml("compact") + " Official Admin</div>" : "") +
+        coverEmblemHtml +
         coverControlsHtml +
-        '</div><div class="profile-body">' +
-        '<div class="profile-top-row"><div class="profile-avatar-ring ' + (isProfileAdmin ? "profile-avatar-ring-admin" : "") + '">' +
+        "</div>" +
+        '<div class="profile-body profile-fb-header">' +
+        '<div class="profile-top-row">' +
+        '<div class="profile-avatar-stage">' +
+        '<div class="' + avatarRingClass + '">' +
         U.renderAvatarHtml({
           name: targetProfile.name,
           avatarUrl: displayAvatarUrl,
@@ -703,29 +871,40 @@
           size: "xl",
           online: isOwnProfile ? true : presence.online,
           isAdmin: isProfileAdmin,
+          isVerified: isProfileVerified,
         }) +
-        '</div><div class="profile-actions">' + actionsHtml + "</div></div>" +
-        '<div class="profile-identity"><div class="profile-name-row"><h1>' + U.escapeHtml(targetProfile.name) + "</h1>" +
-        (isProfileAdmin ? U.renderAdminBadgeHtml("full") : "") + "</div>" +
-        '<div class="profile-handle">@' + U.escapeHtml(targetProfile.username) + "</div>" +
-        '<div class="profile-presence ' + (isOwnProfile || presence.online ? "online" : "") + '">' +
+        "</div>" +
+        quickAvatarBtnHtml +
+        "</div>" +
+        '<div class="profile-fb-name-block">' +
+        '<div class="profile-name-row"><h1>' + U.escapeHtml(targetProfile.name) + "</h1>" +
+        (isProfileAdmin
+          ? U.renderAdminBadgeHtml("full")
+          : isProfileVip
+          ? U.renderVipBadgeHtml("full")
+          : "") +
+        "</div>" +
+        '<div class="profile-handle-line">' +
+        '<span class="profile-handle">@' + U.escapeHtml(targetProfile.username) + "</span>" +
+        '<span class="profile-presence ' + (isOwnProfile || presence.online ? "online" : "") + '">' +
         '<span class="dot"></span><span>' +
         (isOwnProfile ? "Online" : U.escapeHtml(U.formatPresenceLabel(presence.online, presence.lastSeen))) +
-        "</span></div></div>" +
-        adminExecutiveStrip +
-        (targetProfile.bio ? '<p class="profile-bio">' + U.linkifyText(targetProfile.bio) + "</p>" : "") +
-        '<div class="profile-meta-row">' +
-        (workLabel ? '<span class="profile-meta-item profile-meta-work">' + U.ICONS.briefcase + " <span>" + workLabel + "</span></span>" : "") +
-        (formattedDob ? '<span class="profile-meta-item">' + U.ICONS.cake + " Born " + U.escapeHtml(formattedDob) + "</span>" : "") +
-        (targetProfile.location ? '<span class="profile-meta-item">' + U.ICONS.mapPin + " " + U.escapeHtml(targetProfile.location) + "</span>" : "") +
-        '<span class="profile-meta-item">' + U.ICONS.calendar + " Joined " + U.escapeHtml(U.formatJoinDate(targetProfile.createdAt)) + "</span></div>" +
-        socialLinksHtml +
-        '<div class="profile-stats">' +
-        '<div class="profile-stat"><strong>' + (targetProfile.postsCount || 0) + "</strong><span>Posts</span></div>" +
-        '<div class="profile-stat"><strong>' + (targetProfile.friendsCount || 0) + "</strong><span>Friends</span></div>" +
-        '<div class="profile-stat"><strong>' + (targetProfile.followersCount || 0) + "</strong><span>Followers</span></div>" +
-        '<div class="profile-stat"><strong>' + (targetProfile.followingCount || 0) + "</strong><span>Following</span></div>" +
-        "</div></div>";
+        "</span></span></div>" +
+        '<div class="profile-fb-counts tabular-nums">' +
+        "<span><strong>" + (targetProfile.friendsCount || 0) + "</strong> Friends</span>" +
+        "<span>·</span>" +
+        "<span><strong>" + (targetProfile.followersCount || 0) + "</strong> Followers</span>" +
+        "<span>·</span>" +
+        "<span><strong>" + (targetProfile.postsCount || 0) + "</strong> Posts</span>" +
+        "</div>" +
+        "</div>" +
+        "</div>" +
+        '<div class="profile-actions profile-fb-actions">' + actionsHtml + "</div>" +
+        "</div>" +
+        '<div class="profile-fb-tabs" id="profile-fb-tabs" role="tablist">' +
+        '<button type="button" class="profile-fb-tab ' + (activeProfileTab === "posts" ? "active" : "") + '" data-ptab="posts" role="tab">Posts</button>' +
+        '<button type="button" class="profile-fb-tab ' + (activeProfileTab === "about" ? "active" : "") + '" data-ptab="about" role="tab">About</button>' +
+        "</div>";
 
       var editBtn = document.getElementById("btn-edit-profile");
       if (editBtn) editBtn.addEventListener("click", openEditProfileModal);
@@ -740,19 +919,39 @@
         });
       }
 
+      var quickAvatarInput = document.getElementById("quick-avatar-upload");
+      if (quickAvatarInput && isOwnProfile) {
+        quickAvatarInput.addEventListener("change", async function () {
+          var file = quickAvatarInput.files && quickAvatarInput.files[0];
+          if (!file) return;
+          try {
+            U.showToast("Updating profile picture...");
+            var avatarDataUrl = await U.compressImageFileToDataUrl(file, 240, 0.78, 95000);
+            var updatedProf = await HMM.authService.updateUserAvatarUrl(ctx.user.uid, avatarDataUrl);
+            if (updatedProf) targetProfile = updatedProf;
+            await ctx.refreshProfile();
+            renderHeader();
+            U.showToast("Profile picture updated!", "success");
+          } catch (err) {
+            U.showToast(U.getFriendlyErrorMessage(err), "error");
+          }
+          quickAvatarInput.value = "";
+        });
+      }
+
       var quickCoverInput = document.getElementById("quick-cover-upload");
-      if (quickCoverInput && isOwnProfile && ctx.isAdmin) {
+      if (quickCoverInput && canUploadCover) {
         quickCoverInput.addEventListener("change", async function () {
           var file = quickCoverInput.files && quickCoverInput.files[0];
           if (!file) return;
           try {
-            U.showToast("Uploading cover photo...");
-            var dataUrl = await U.compressImageFileToDataUrl(file, 1200, 0.8, 300000);
-            var updated = await HMM.authService.updateAdminCoverPhoto(ctx.user.uid, dataUrl);
+            U.showToast("Uploading 1200 × 450 cover photo...");
+            var dataUrl = await U.compressCoverPhotoToDataUrl(file);
+            var updated = await HMM.authService.updateUserCoverPhoto(ctx.user.uid, dataUrl);
             if (updated) targetProfile = updated;
             await ctx.refreshProfile();
             renderHeader();
-            U.showToast("Cover photo updated!", "success");
+            U.showToast("Cover photo updated (1200 × 450 px)!", "success");
           } catch (err) {
             U.showToast(U.getFriendlyErrorMessage(err), "error");
           }
@@ -761,11 +960,11 @@
       }
 
       var quickCoverRemove = document.getElementById("quick-cover-remove");
-      if (quickCoverRemove && isOwnProfile && ctx.isAdmin) {
+      if (quickCoverRemove && canUploadCover) {
         quickCoverRemove.addEventListener("click", async function () {
           quickCoverRemove.disabled = true;
           try {
-            var updated = await HMM.authService.updateAdminCoverPhoto(ctx.user.uid, "");
+            var updated = await HMM.authService.updateUserCoverPhoto(ctx.user.uid, "");
             if (updated) targetProfile = updated;
             await ctx.refreshProfile();
             renderHeader();
@@ -784,10 +983,21 @@
         });
       }
 
+      renderIntroAndAbout(isProfileAdmin, isProfileVip, false);
       renderProfilePosts();
     }
 
     document.getElementById("profile-header-card").addEventListener("click", async function (e) {
+      var tabBtn = e.target.closest("[data-ptab]");
+      if (tabBtn) {
+        var nextTab = tabBtn.dataset.ptab;
+        if (nextTab && nextTab !== activeProfileTab) {
+          activeProfileTab = nextTab;
+          renderHeader();
+        }
+        return;
+      }
+
       var btn = e.target.closest("[data-paction]");
       if (!btn) return;
       var action = btn.dataset.paction;

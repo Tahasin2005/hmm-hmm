@@ -80,7 +80,7 @@ service cloud.firestore {
         && data.keys().hasOnly([
           'uid', 'name', 'username', 'bio', 'avatarUrl', 'avatarColor',
           'location', 'jobTitle', 'workplace', 'birthDate', 'socialLinks',
-          'coverPhotoUrl', 'visibility', 'friendRequestPref',
+          'coverPhotoUrl', 'isVerified', 'visibility', 'friendRequestPref',
           'followersCount', 'followingCount', 'friendsCount', 'postsCount',
           'isSuspended', 'role', 'createdAt', 'updatedAt'
         ])
@@ -96,6 +96,7 @@ service cloud.firestore {
         && (!('birthDate' in data) || (data.birthDate is string && data.birthDate.size() <= 20))
         && (!('socialLinks' in data) || (data.socialLinks is list && data.socialLinks.size() <= 10))
         && (!('coverPhotoUrl' in data) || (data.coverPhotoUrl is string && data.coverPhotoUrl.size() <= 350000))
+        && (!('isVerified' in data) || data.isVerified is bool)
         && (data.visibility == 'public' || data.visibility == 'friends')
         && (data.friendRequestPref == 'everyone' || data.friendRequestPref == 'none')
         && data.followersCount is int && data.followersCount >= 0
@@ -349,7 +350,7 @@ service cloud.firestore {
         ])
         && data.keys().hasOnly([
           'notificationId', 'recipientId', 'senderId', 'senderName',
-          'senderUsername', 'type', 'referenceId', 'message', 'isRead', 'createdAt'
+          'senderUsername', 'type', 'referenceId', 'message', 'isRead', 'isSeen', 'createdAt'
         ])
         && isValidId(data.notificationId) && data.notificationId == notificationId
         && isValidId(data.recipientId)
@@ -357,10 +358,11 @@ service cloud.firestore {
         && data.senderId != data.recipientId
         && data.senderName is string && data.senderName.size() >= 1 && data.senderName.size() <= 80
         && isValidUsername(data.senderUsername)
-        && data.type in ['friend_request', 'friend_accepted', 'like', 'comment', 'message', 'follow', 'mention', 'tag']
+        && data.type in ['friend_request', 'friend_accepted', 'like', 'comment', 'message', 'follow', 'mention', 'tag', 'vip_verified']
         && data.referenceId is string && data.referenceId.size() <= 128
         && data.message is string && data.message.size() >= 1 && data.message.size() <= 240
         && data.isRead is bool
+        && (!('isSeen' in data) || data.isSeen is bool)
         && data.createdAt is timestamp;
     }
 
@@ -559,7 +561,7 @@ service cloud.firestore {
                 'visibility', 'friendRequestPref', 'updatedAt'
               ]) ||
               (
-                isAdmin()
+                (isAdmin() || ('isVerified' in existing() && existing().isVerified == true))
                 && incoming().diff(existing()).affectedKeys().hasOnly([
                   'name', 'username', 'bio', 'avatarUrl', 'avatarColor',
                   'location', 'jobTitle', 'workplace', 'birthDate', 'socialLinks',
@@ -576,13 +578,15 @@ service cloud.firestore {
             && incoming().diff(existing()).affectedKeys().hasOnly([
               'name', 'username', 'bio', 'avatarUrl', 'avatarColor',
               'location', 'jobTitle', 'workplace', 'birthDate', 'socialLinks',
-              'coverPhotoUrl', 'visibility', 'friendRequestPref', 'updatedAt'
+              'coverPhotoUrl', 'isVerified', 'visibility', 'friendRequestPref', 'updatedAt'
             ])
             && incoming().updatedAt == request.time
           ) ||
           (
-            isOwner(uid)
-            && isAdmin()
+            (
+              isAdmin() ||
+              (isOwner(uid) && 'isVerified' in existing() && existing().isVerified == true)
+            )
             && incoming().diff(existing()).affectedKeys().hasOnly(['coverPhotoUrl', 'updatedAt'])
             && incoming().coverPhotoUrl is string && incoming().coverPhotoUrl.size() <= 350000
             && incoming().updatedAt == request.time
@@ -650,7 +654,8 @@ service cloud.firestore {
           ) ||
           (
             isAdmin()
-            && incoming().diff(existing()).affectedKeys().hasOnly(['isSuspended', 'role', 'postsCount', 'updatedAt'])
+            && incoming().diff(existing()).affectedKeys().hasOnly(['isSuspended', 'isVerified', 'role', 'postsCount', 'updatedAt'])
+            && (!('isVerified' in incoming()) || incoming().isVerified is bool)
           )
         );
 
@@ -1015,9 +1020,9 @@ service cloud.firestore {
         && (
           (
             existing().recipientId == request.auth.uid
-            && existing().isRead == false
-            && incoming().isRead == true
-            && incoming().diff(existing()).affectedKeys().hasOnly(['isRead'])
+            && incoming().diff(existing()).affectedKeys().hasOnly(['isRead', 'isSeen'])
+            && (!('isRead' in incoming().diff(existing()).affectedKeys()) || incoming().isRead == true)
+            && (!('isSeen' in incoming().diff(existing()).affectedKeys()) || incoming().isSeen == true)
           ) ||
           isAdmin()
         );

@@ -1,5 +1,6 @@
 /* ============================================================================
- * KLORIX — User Profile & Official Admin Profile Styles
+ * KLORIX — Facebook-Style User Profile, Blue Verified VIP & Official Admin Styles
+ * Fixed 16:6 (1200 x 450 px) Cover Ratio — 100% Identical on Mobile & PC
  * ============================================================================ */
 
 .profile-card {
@@ -7,10 +8,14 @@
   overflow: hidden;
 }
 
+/* Fixed 16:6 (8:3 = 1200 x 450 px) aspect ratio on EVERY screen size */
 .profile-cover {
-  height: 148px;
+  width: 100%;
+  aspect-ratio: 16 / 6;
+  height: auto;
   background: linear-gradient(135deg, #006A4E 0%, #0F766E 60%, #004E39 100%);
   position: relative;
+  overflow: hidden;
 }
 
 .profile-cover::after {
@@ -19,21 +24,51 @@
   inset: 0;
   background-image: radial-gradient(rgba(255, 255, 255, 0.14) 1px, transparent 1px);
   background-size: 20px 20px;
+  pointer-events: none;
+}
+
+.profile-cover.has-cover-photo {
+  width: 100%;
+  aspect-ratio: 16 / 6;
+  height: auto;
+  background: #0B0F0E;
+}
+
+.profile-cover.has-cover-photo::after {
+  background-image: linear-gradient(to top, rgba(0, 0, 0, 0.32), transparent 48%);
+  background-size: auto;
+  pointer-events: none;
+}
+
+.profile-cover-img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center;
+  display: block;
+  cursor: zoom-in;
 }
 
 .profile-body {
-  padding: 0 22px 22px;
+  padding: 0 22px 18px;
 }
 
 .profile-top-row {
   display: flex;
   align-items: flex-end;
-  justify-content: space-between;
-  gap: 14px;
-  margin-top: -44px;
+  gap: 16px;
+  margin-top: -54px;
   position: relative;
   z-index: 2;
   flex-wrap: wrap;
+}
+
+.profile-avatar-stage {
+  position: relative;
+  display: inline-flex;
+  flex-shrink: 0;
 }
 
 .profile-avatar-ring {
@@ -41,36 +76,75 @@
   background: var(--surface);
   border-radius: var(--radius-full);
   display: inline-flex;
+  box-shadow: 0 4px 16px rgba(15, 23, 42, 0.12);
 }
 
-.profile-actions {
-  display: flex;
+.profile-avatar-cam-btn {
+  position: absolute;
+  right: 2px;
+  bottom: 2px;
+  z-index: 4;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  background: var(--surface-subtle);
+  border: 2px solid var(--surface);
+  color: var(--text);
+  display: inline-flex;
   align-items: center;
-  gap: 8px;
-  flex-wrap: wrap;
-  padding-top: 12px;
+  justify-content: center;
+  cursor: pointer;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.18);
+  transition: background-color 0.15s ease, transform 0.12s ease;
 }
 
-.profile-identity {
-  margin-top: 12px;
+.profile-avatar-cam-btn:hover {
+  background: var(--border);
+  transform: scale(1.05);
+}
+
+.profile-avatar-cam-btn svg {
+  width: 16px;
+  height: 16px;
+}
+
+/* Keep verified tick clear when camera button is present on own profile */
+.profile-avatar-stage:has(.profile-avatar-cam-btn) .avatar-blue-tick {
+  right: auto;
+  left: -2px;
+  bottom: 2px;
+}
+
+.profile-fb-name-block {
+  flex: 1;
+  min-width: 200px;
+  padding-top: 58px;
 }
 
 .profile-name-row {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
   flex-wrap: wrap;
 }
 
 .profile-name-row h1 {
   font-size: 24px;
   font-weight: 800;
+  line-height: 1.2;
+}
+
+.profile-handle-line {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-top: 3px;
 }
 
 .profile-handle {
   font-size: 14px;
   color: var(--text-muted);
-  margin-top: 2px;
 }
 
 .profile-presence {
@@ -80,7 +154,6 @@
   font-size: 12.5px;
   font-weight: 600;
   color: var(--text-muted);
-  margin-top: 4px;
 }
 
 .profile-presence .dot {
@@ -98,8 +171,137 @@
   background: #10B981;
 }
 
+.profile-fb-counts {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 6px;
+  font-size: 13.5px;
+  color: var(--text-muted);
+}
+
+.profile-fb-counts strong {
+  color: var(--text);
+  font-weight: 800;
+}
+
+.profile-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.profile-fb-actions {
+  margin-top: 14px;
+  padding-top: 14px;
+  border-top: 1px solid var(--border);
+}
+
+/* Facebook-style Profile Tabs (Posts | About) */
+.profile-fb-tabs {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0 18px;
+  border-top: 1px solid var(--border);
+  background: var(--surface);
+}
+
+.profile-fb-tab {
+  position: relative;
+  padding: 13px 18px;
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  font-size: 14.5px;
+  font-weight: 700;
+  cursor: pointer;
+  border-radius: var(--radius-sm) var(--radius-sm) 0 0;
+  transition: color 0.15s ease, background-color 0.15s ease;
+}
+
+.profile-fb-tab:hover {
+  background: var(--surface-subtle);
+  color: var(--text);
+}
+
+.profile-fb-tab.active {
+  color: #1877F2;
+}
+
+.profile-fb-tab.active::after {
+  content: "";
+  position: absolute;
+  left: 10px;
+  right: 10px;
+  bottom: 0;
+  height: 3px;
+  border-radius: 3px 3px 0 0;
+  background: #1877F2;
+}
+
+/* Facebook-style Intro & About Card */
+.profile-intro-card {
+  padding: 16px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.profile-intro-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.profile-intro-head h2 {
+  font-size: 17px;
+  font-weight: 800;
+  margin: 0;
+}
+
+.profile-intro-list {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+}
+
+.profile-intro-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  font-size: 14px;
+  color: var(--text);
+  line-height: 1.45;
+}
+
+.profile-intro-row svg {
+  width: 18px;
+  height: 18px;
+  color: var(--text-muted);
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+.profile-about-block {
+  padding-top: 10px;
+  border-top: 1px solid var(--border);
+}
+
+.profile-about-label {
+  font-size: 11.5px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-muted);
+  margin-bottom: 8px;
+}
+
 .profile-bio {
-  margin-top: 12px;
+  margin: 0;
   font-size: 14.5px;
   line-height: 1.55;
   white-space: pre-wrap;
@@ -110,7 +312,7 @@
   align-items: center;
   gap: 16px;
   flex-wrap: wrap;
-  margin-top: 12px;
+  margin-top: 10px;
   font-size: 13px;
   color: var(--text-muted);
 }
@@ -125,14 +327,14 @@
   display: grid;
   grid-template-columns: repeat(4, 1fr);
   gap: 8px;
-  margin-top: 18px;
-  padding-top: 16px;
+  margin-top: 8px;
+  padding-top: 14px;
   border-top: 1px solid var(--border);
 }
 
 .profile-stat {
   text-align: center;
-  padding: 8px 6px;
+  padding: 10px 6px;
   border-radius: var(--radius-sm);
   background: var(--surface-subtle);
 }
@@ -151,28 +353,7 @@
   font-weight: 600;
 }
 
-/* Admin Cover Photo & Controls */
-.profile-cover.has-cover-photo {
-  height: 196px;
-  background: #0B0F0E;
-}
-
-.profile-cover.has-cover-photo::after {
-  background-image: linear-gradient(to top, rgba(0, 0, 0, 0.35), transparent 55%);
-  background-size: auto;
-  pointer-events: none;
-}
-
-.profile-cover-img {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  display: block;
-  cursor: zoom-in;
-}
-
+/* Cover Photo Controls (VIP & Official Admin Only) */
 .profile-cover-controls {
   position: absolute;
   bottom: 12px;
@@ -187,13 +368,13 @@
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  height: 32px;
-  padding: 0 12px;
-  border-radius: var(--radius-full);
-  background: rgba(11, 15, 14, 0.68);
-  border: 1px solid rgba(255, 255, 255, 0.25);
+  height: 34px;
+  padding: 0 13px;
+  border-radius: var(--radius-md);
+  background: rgba(11, 15, 14, 0.72);
+  border: 1px solid rgba(255, 255, 255, 0.28);
   color: #FFFFFF;
-  font-size: 12px;
+  font-size: 12.5px;
   font-weight: 600;
   cursor: pointer;
   backdrop-filter: blur(8px);
@@ -201,13 +382,13 @@
 }
 
 .profile-cover-btn:hover {
-  background: rgba(11, 15, 14, 0.86);
+  background: rgba(11, 15, 14, 0.9);
   transform: translateY(-1px);
 }
 
 .profile-cover-btn-del {
   padding: 0 9px;
-  background: rgba(185, 28, 28, 0.78);
+  background: rgba(185, 28, 28, 0.8);
   border-color: rgba(254, 202, 202, 0.35);
 }
 
@@ -221,7 +402,7 @@
   align-items: center;
   flex-wrap: wrap;
   gap: 8px;
-  margin-top: 14px;
+  margin-top: 4px;
 }
 
 .profile-social-chip {
@@ -301,6 +482,12 @@
   border: 1px solid var(--border);
 }
 
+.ep-cover-locked {
+  border-style: dashed;
+  background: rgba(24, 119, 242, 0.05);
+  border-color: rgba(24, 119, 242, 0.25);
+}
+
 .ep-section-title {
   display: flex;
   align-items: center;
@@ -332,8 +519,11 @@
   gap: 8px;
 }
 
+/* Exact 16:6 (1200 x 450 px) preview matching live profile banner */
 .ep-cover-preview {
-  height: 108px;
+  width: 100%;
+  aspect-ratio: 16 / 6;
+  height: auto;
   border-radius: var(--radius-sm);
   border: 1px dashed var(--border);
   background: linear-gradient(135deg, #042F2E 0%, #006A4E 55%, #1877F2 100%);
@@ -342,9 +532,11 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  color: rgba(255, 255, 255, 0.9);
+  color: rgba(255, 255, 255, 0.92);
   font-size: 12.5px;
   font-weight: 600;
+  text-align: center;
+  padding: 8px;
   overflow: hidden;
 }
 
@@ -410,34 +602,44 @@
 }
 
 /* ============================================================================
- * OFFICIAL ADMINISTRATOR DISTINGUISHED PROFILE STYLING
+ * OFFICIAL ADMINISTRATOR & BLUE VERIFIED VIP DISTINGUISHED PROFILE STYLING
  * ============================================================================ */
-.profile-card-admin {
-  border-color: rgba(24, 119, 242, 0.38);
-  box-shadow: 0 8px 28px rgba(24, 119, 242, 0.12);
+.profile-card-admin,
+.profile-card-vip {
+  border-color: rgba(24, 119, 242, 0.36);
+  box-shadow: 0 8px 28px rgba(24, 119, 242, 0.11);
 }
 
 .profile-cover-admin {
   background: linear-gradient(135deg, #042F2E 0%, #006A4E 48%, #1877F2 100%);
 }
 
+.profile-cover-vip {
+  background: linear-gradient(135deg, #0F172A 0%, #1D4ED8 52%, #0EA5E9 100%);
+}
+
 .profile-cover-emblem {
   position: absolute;
-  top: 14px;
-  right: 16px;
+  top: 12px;
+  right: 14px;
   z-index: 2;
   display: inline-flex;
   align-items: center;
   gap: 6px;
   padding: 5px 12px;
   border-radius: var(--radius-full);
-  background: rgba(11, 15, 14, 0.56);
-  border: 1px solid rgba(96, 165, 250, 0.5);
+  background: rgba(11, 15, 14, 0.58);
+  border: 1px solid rgba(96, 165, 250, 0.52);
   color: #EFF6FF;
   font-size: 12px;
   font-weight: 700;
   letter-spacing: 0.02em;
   backdrop-filter: blur(8px);
+}
+
+.profile-cover-emblem-vip {
+  background: rgba(15, 23, 42, 0.62);
+  border-color: rgba(56, 189, 248, 0.6);
 }
 
 .profile-avatar-ring-admin {
@@ -446,18 +648,29 @@
   box-shadow: 0 4px 16px rgba(24, 119, 242, 0.32);
 }
 
-.admin-profile-banner {
-  margin-top: 14px;
-  padding: 12px 14px;
+.profile-avatar-ring-vip {
+  background: linear-gradient(135deg, #1877F2, #2563EB, #38BDF8);
+  padding: 4px;
+  box-shadow: 0 4px 16px rgba(24, 119, 242, 0.34);
+}
+
+.admin-profile-banner,
+.vip-profile-banner {
+  padding: 11px 13px;
   border-radius: var(--radius-md);
   background: linear-gradient(135deg, rgba(24, 119, 242, 0.09) 0%, rgba(0, 106, 78, 0.08) 100%);
-  border: 1px solid rgba(24, 119, 242, 0.28);
+  border: 1px solid rgba(24, 119, 242, 0.26);
   display: flex;
   align-items: flex-start;
   gap: 11px;
 }
 
-.admin-profile-banner-icon {
+.vip-profile-banner {
+  background: linear-gradient(135deg, rgba(24, 119, 242, 0.1) 0%, rgba(14, 165, 233, 0.09) 100%);
+}
+
+.admin-profile-banner-icon,
+.vip-profile-banner-icon {
   width: 34px;
   height: 34px;
   border-radius: var(--radius-sm);
@@ -469,18 +682,30 @@
   flex-shrink: 0;
 }
 
-.admin-profile-banner-text {
+.vip-profile-banner-icon {
+  background: linear-gradient(135deg, #1877F2, #0EA5E9);
+}
+
+.admin-profile-banner-icon .admin-verified-icon,
+.vip-profile-banner-icon .admin-verified-icon {
+  color: #FFFFFF;
+}
+
+.admin-profile-banner-text,
+.vip-profile-banner-text {
   display: flex;
   flex-direction: column;
   gap: 2px;
 }
 
-.admin-profile-banner-text strong {
+.admin-profile-banner-text strong,
+.vip-profile-banner-text strong {
   font-size: 13.5px;
   color: var(--text);
 }
 
-.admin-profile-banner-text span {
+.admin-profile-banner-text span,
+.vip-profile-banner-text span {
   font-size: 12.5px;
   color: var(--text-muted);
   line-height: 1.4;
@@ -515,13 +740,45 @@
 }
 
 @media (max-width: 640px) {
-  .profile-cover.has-cover-photo {
-    height: 160px;
+  .profile-body {
+    padding: 0 14px 14px;
+  }
+
+  .profile-top-row {
+    flex-direction: column;
+    align-items: flex-start;
+    margin-top: -48px;
+    gap: 8px;
+  }
+
+  .profile-fb-name-block {
+    padding-top: 2px;
+    width: 100%;
+  }
+
+  .profile-name-row h1 {
+    font-size: 22px;
   }
 
   .profile-cover-controls {
-    bottom: 10px;
-    right: 10px;
+    bottom: 8px;
+    right: 8px;
+  }
+
+  .profile-cover-btn {
+    height: 30px;
+    padding: 0 10px;
+    font-size: 11.5px;
+  }
+
+  .profile-fb-tabs {
+    padding: 0 8px;
+  }
+
+  .profile-fb-tab {
+    flex: 1;
+    text-align: center;
+    padding: 11px 10px;
   }
 
   .ep-two-col {

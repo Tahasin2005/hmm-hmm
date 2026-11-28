@@ -73,12 +73,13 @@
           }
 
           var isOffAdmin = U.isOfficialAdminUser(u);
+          var isVer = isOffAdmin || U.isVerifiedUser(u);
           return (
             '<div class="person-card">' +
             '<a href="#profile?uid=' + encodeURIComponent(u.uid) + '" class="person-card-top">' +
-            U.renderAvatarHtml({ name: u.name, avatarUrl: u.avatarUrl, avatarColor: u.avatarColor, size: "md", isAdmin: isOffAdmin }) +
+            U.renderAvatarHtml({ name: u.name, avatarUrl: u.avatarUrl, avatarColor: u.avatarColor, size: "md", isAdmin: isOffAdmin, isVerified: isVer }) +
             '<div class="user-row-meta"><span class="user-row-name name-with-badge">' + U.escapeHtml(u.name) +
-            (isOffAdmin ? U.renderAdminBadgeHtml("compact") : "") + "</span>" +
+            (isVer ? U.renderVerifiedBadgeHtml(u, "compact") : "") + "</span>" +
             '<span class="user-row-handle">@' + U.escapeHtml(u.username) + (u.location ? " · " + U.escapeHtml(u.location) : "") + "</span></div></a>" +
             '<p class="person-card-bio">' + U.escapeHtml(u.bio || ("Member of the " + cfg.siteName + " community.")) + "</p>" +
             '<div class="person-card-actions">' + friendBtn + followBtn + "</div></div>"

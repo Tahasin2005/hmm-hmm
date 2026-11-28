@@ -213,7 +213,9 @@
   .post-card,
   .announcement-card,
   .feed-promo-card,
-  .profile-card {
+  .profile-card,
+  .profile-intro-card,
+  .notif-card-wrap {
     border-radius: 0;
     border-left: none;
     border-right: none;
@@ -283,12 +285,8 @@
     height: 40px;
   }
 
-  .profile-cover {
-    height: 118px;
-  }
-
   .profile-body {
-    padding: 0 14px 16px;
+    padding: 0 14px 14px;
   }
 
   .theme-options {

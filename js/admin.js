@@ -39,7 +39,11 @@
         .map(function (d) { return d.data(); })
         .sort(function (a, b) { return U.timestampToMs(b.createdAt) - U.timestampToMs(a.createdAt); }),
       users: results[1].docs
-        .map(function (d) { return d.data(); })
+        .map(function (d) {
+          var u = d.data();
+          if (u && u.uid) U.setVerifiedUid(u.uid, Boolean(u.isVerified));
+          return u;
+        })
         .sort(function (a, b) { return U.timestampToMs(b.createdAt) - U.timestampToMs(a.createdAt); }),
       posts: results[2].docs
         .map(function (d) { return d.data(); })
@@ -924,15 +928,24 @@
             .map(function (u) {
               var isSelf = u.uid === ctx.user.uid;
               var isAdm = U.isOfficialAdminUser(u);
+              var isVip = Boolean(u.isVerified) && !isAdm;
+              var isVer = isAdm || isVip;
               return (
                 '<tr><td data-label="Member"><a href="#profile?uid=' + encodeURIComponent(u.uid) + '" style="display:flex;align-items:center;gap:10px;">' +
-                U.renderAvatarHtml({ name: u.name, avatarUrl: u.avatarUrl, avatarColor: u.avatarColor, size: "sm", isAdmin: isAdm }) +
-                "<div><strong>" + U.escapeHtml(u.name) + (isAdm ? " " + U.renderAdminBadgeHtml("compact") : "") +
+                U.renderAvatarHtml({ name: u.name, avatarUrl: u.avatarUrl, avatarColor: u.avatarColor, size: "sm", isAdmin: isAdm, isVerified: isVer }) +
+                '<div><strong class="name-with-badge">' + U.escapeHtml(u.name) + (isVer ? " " + U.renderVerifiedBadgeHtml(u, "compact") : "") +
                 '</strong><div class="text-muted" style="font-size:12px;">@' + U.escapeHtml(u.username) + "</div></div></a></td>" +
                 '<td data-label="Location" class="text-muted">' + U.escapeHtml(u.location || "—") + "</td>" +
                 '<td data-label="Stats" class="tabular-nums text-muted" style="font-size:12.5px;">' + (u.postsCount || 0) + " posts · " + (u.friendsCount || 0) + " friends</td>" +
-                '<td data-label="Status">' + (u.isSuspended ? '<span class="status-tag status-suspended">Suspended</span>' : '<span class="status-tag status-resolved">Active</span>') + "</td>" +
+                '<td data-label="Status"><div style="display:flex;gap:5px;flex-wrap:wrap;align-items:center;">' +
+                (u.isSuspended ? '<span class="status-tag status-suspended">Suspended</span>' : '<span class="status-tag status-resolved">Active</span>') +
+                (isAdm ? '<span class="status-tag status-vip">Admin</span>' : isVip ? '<span class="status-tag status-vip">Blue VIP</span>' : "") +
+                "</div></td>" +
                 '<td data-label="Actions"><div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;">' +
+                (!isAdm
+                  ? '<button type="button" class="btn ' + (isVip ? "btn-vip-active" : "btn-outline") + ' btn-sm" data-toggle-verify="' + U.escapeHtml(u.uid) + '" data-verified="' + (isVip ? "1" : "0") + '" title="' + (isVip ? "Remove Blue Verification & VIP status" : "Grant Blue Verification & VIP Cover Photo access") + '">' +
+                    (isVip ? U.renderVipBadgeHtml("compact") + " VIP Active" : U.ICONS.check + " Verify VIP") + "</button>"
+                  : "") +
                 '<a href="#inspect?uid=' + encodeURIComponent(u.uid) + '" class="btn btn-secondary btn-sm" title="Inspect account read-only">' + U.ICONS.eye + " View</a>" +
                 (!isSelf
                   ? '<button type="button" class="btn btn-primary btn-sm" data-login-as-uid="' + U.escapeHtml(u.uid) + '" title="Log into this account to post, message &amp; manage">' + U.ICONS.user + " Login As</button>"
@@ -1116,6 +1129,36 @@
         } catch (err) {
           U.showToast(U.getFriendlyErrorMessage(err), "error");
           repBtn.disabled = false;
+        }
+        return;
+      }
+
+      var verifyBtn = e.target.closest("[data-toggle-verify]");
+      if (verifyBtn) {
+        var vUid = verifyBtn.dataset.toggleVerify;
+        var nextVerified = verifyBtn.dataset.verified !== "1";
+        verifyBtn.disabled = true;
+        try {
+          await HMM.authService.setUserVerified(vUid, nextVerified);
+          if (nextVerified) {
+            U.createNotificationRecord({
+              recipientId: vUid,
+              sender: ctx.profile,
+              type: "vip_verified",
+              referenceId: vUid,
+              message: "Congratulations! Your profile is now Blue Verified (VIP). You can now upload a custom cover photo!",
+            }).catch(function () {});
+          }
+          U.showToast(
+            nextVerified
+              ? "Blue Verification (VIP) enabled! User can now upload a cover photo."
+              : "Blue Verification (VIP) removed from user.",
+            "success"
+          );
+          await loadAll();
+        } catch (err) {
+          U.showToast(U.getFriendlyErrorMessage(err), "error");
+          verifyBtn.disabled = false;
         }
         return;
       }
@@ -1313,14 +1356,26 @@
 
       if (activeTab === "overview") {
         var email = (inspected.privateAccount && inspected.privateAccount.email) || "Not recorded";
+        var isTargetAdm = U.isOfficialAdminUser(targetProfile);
+        var isTargetVip = Boolean(targetProfile.isVerified) && !isTargetAdm;
         panel.innerHTML =
           '<div class="admin-grid-2">' +
           '<div class="admin-section-box">' +
           '<div style="display:flex;align-items:center;gap:14px;margin-bottom:14px;">' +
-          U.renderAvatarHtml({ name: targetProfile.name, avatarUrl: targetProfile.avatarUrl, avatarColor: targetProfile.avatarColor, size: "lg", isAdmin: U.isOfficialAdminUser(targetProfile) }) +
-          '<div><h3 style="font-size:18px;font-weight:800;">' + U.escapeHtml(targetProfile.name) + "</h3>" +
+          U.renderAvatarHtml({ name: targetProfile.name, avatarUrl: targetProfile.avatarUrl, avatarColor: targetProfile.avatarColor, size: "lg", isAdmin: isTargetAdm, isVerified: isTargetAdm || isTargetVip }) +
+          '<div><h3 class="name-with-badge" style="font-size:18px;font-weight:800;">' + U.escapeHtml(targetProfile.name) +
+          (isTargetAdm || isTargetVip ? " " + U.renderVerifiedBadgeHtml(targetProfile, "compact") : "") + "</h3>" +
           '<div class="text-muted">@' + U.escapeHtml(targetProfile.username) + "</div>" +
-          '<div style="margin-top:6px;">' + (targetProfile.isSuspended ? '<span class="status-tag status-suspended">Suspended</span>' : '<span class="status-tag status-resolved">Active</span>') + "</div></div></div>" +
+          '<div style="margin-top:6px;display:flex;gap:6px;flex-wrap:wrap;align-items:center;">' +
+          (targetProfile.isSuspended ? '<span class="status-tag status-suspended">Suspended</span>' : '<span class="status-tag status-resolved">Active</span>') +
+          (isTargetAdm ? '<span class="status-tag status-vip">Official Admin</span>' : isTargetVip ? '<span class="status-tag status-vip">Blue Verified VIP</span>' : '<span class="status-tag status-dismissed">Standard Member</span>') +
+          "</div></div></div>" +
+          (!isTargetAdm
+            ? '<div style="margin-bottom:14px;"><button type="button" id="btn-inspect-toggle-vip" class="btn ' +
+              (isTargetVip ? "btn-vip-active" : "btn-primary") + ' btn-sm">' +
+              (isTargetVip ? U.renderVipBadgeHtml("compact") + " Blue VIP Active (Click to Remove)" : U.ICONS.check + " Enable Blue Verification (VIP)") +
+              "</button></div>"
+            : "") +
           '<div class="inspect-kv-list">' +
           '<div><span>Private Email</span><strong class="font-mono" style="font-size:12.5px;">' + U.escapeHtml(email) + "</strong></div>" +
           '<div><span>UID</span><strong class="font-mono" style="font-size:12px;">' + U.escapeHtml(targetProfile.uid) + "</strong></div>" +
@@ -1340,6 +1395,33 @@
           '<p class="text-muted" style="font-size:13.5px;line-height:1.6;">' + U.escapeHtml(targetProfile.bio || "No bio set.") + "</p>" +
           '<div style="margin-top:14px;"><a href="#profile?uid=' + encodeURIComponent(targetUid) + '" class="btn btn-secondary btn-sm">Open Public Profile</a></div>' +
           "</div></div>";
+
+        var vipToggleBtn = document.getElementById("btn-inspect-toggle-vip");
+        if (vipToggleBtn) {
+          vipToggleBtn.addEventListener("click", async function () {
+            vipToggleBtn.disabled = true;
+            var nextV = !Boolean(targetProfile.isVerified);
+            try {
+              var updatedProf = await HMM.authService.setUserVerified(targetUid, nextV);
+              if (updatedProf) targetProfile = updatedProf;
+              else targetProfile.isVerified = nextV;
+              if (nextV) {
+                U.createNotificationRecord({
+                  recipientId: targetUid,
+                  sender: ctx.profile,
+                  type: "vip_verified",
+                  referenceId: targetUid,
+                  message: "Congratulations! Your profile is now Blue Verified (VIP). You can now upload a custom cover photo!",
+                }).catch(function () {});
+              }
+              U.showToast(nextV ? "Blue Verification (VIP) enabled!" : "Blue Verification (VIP) removed.", "success");
+              renderInspectTab();
+            } catch (err) {
+              U.showToast(U.getFriendlyErrorMessage(err), "error");
+              vipToggleBtn.disabled = false;
+            }
+          });
+        }
         return;
       }
 
