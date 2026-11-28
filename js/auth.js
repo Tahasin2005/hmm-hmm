@@ -452,10 +452,8 @@
       root.innerHTML =
         '<div class="gate-page">' +
         '<div class="gate-card">' +
-        '<a href="#login" style="display:inline-flex;align-items:center;gap:10px;margin-bottom:20px;">' +
-        '<img src="' + U.escapeHtml(cfg.logoUrl) + '" alt="' + U.escapeHtml(cfg.siteName) + '" data-site-logo style="width:40px;height:40px;border-radius:10px;object-fit:cover;" />' +
-        '<div><div class="brand-name" data-site-name>' + U.escapeHtml(cfg.siteName) + '</div>' +
-        '<div class="brand-tagline" data-site-tagline>' + U.escapeHtml(cfg.tagline) + "</div></div>" +
+        '<a href="#login" class="auth-gate-brand" aria-label="' + U.escapeHtml(cfg.siteName) + '">' +
+        '<img src="' + U.escapeHtml(cfg.logoUrl) + '" alt="' + U.escapeHtml(cfg.siteName) + '" class="auth-gate-logo" data-site-logo />' +
         "</a>" +
         "<h2>Reset your password</h2>" +
         '<p class="text-muted" style="margin-top:6px;margin-bottom:20px;font-size:14px;">Enter your email address and we will send you a password reset link.</p>' +
@@ -501,7 +499,7 @@
     root.innerHTML =
       '<div class="auth-page">' +
       '<section class="auth-hero">' +
-      '<a href="#login" class="auth-hero-brand"><img src="' + U.escapeHtml(cfg.logoUrl) + '" alt="' + U.escapeHtml(cfg.siteName) + '" data-site-logo style="object-fit:cover;" /><span data-site-name>' + U.escapeHtml(cfg.siteName) + "</span></a>" +
+      '<a href="#login" class="auth-hero-brand" aria-label="' + U.escapeHtml(cfg.siteName) + '"><img src="' + U.escapeHtml(cfg.logoUrl) + '" alt="' + U.escapeHtml(cfg.siteName) + '" data-site-logo /></a>' +
       '<div class="auth-hero-content">' +
       "<h1>" + (isRegister ? "Claim your @username today." : U.escapeHtml(cfg.tagline)) + "</h1>" +
       "<p>Join Bangladesh's warm, modern social community. Share daily moments, react with friends, and chat in real time from any phone or computer.</p>" +
@@ -513,7 +511,7 @@
       '<div class="auth-hero-footer"><span data-site-name>' + U.escapeHtml(cfg.siteName) + "</span> Social Network · Built for Bangladesh &amp; beyond</div>" +
       "</section>" +
       '<main class="auth-panel"><div class="auth-card">' +
-      '<div class="auth-mobile-brand"><img src="' + U.escapeHtml(cfg.logoUrl) + '" alt="' + U.escapeHtml(cfg.siteName) + '" data-site-logo style="object-fit:cover;" /><div><div class="brand-name" data-site-name>' + U.escapeHtml(cfg.siteName) + '</div><div class="brand-tagline" data-site-tagline>' + U.escapeHtml(cfg.tagline) + "</div></div></div>" +
+      '<div class="auth-mobile-brand"><img src="' + U.escapeHtml(cfg.logoUrl) + '" alt="' + U.escapeHtml(cfg.siteName) + '" data-site-logo /></div>' +
       "<h2>" + (isRegister ? "Create account" : "Welcome back") + "</h2>" +
       '<p class="auth-subtitle">' + (isRegister ? "Join the " + U.escapeHtml(cfg.siteName) + " community in under a minute." : "Sign in to continue to your " + U.escapeHtml(cfg.siteName) + " feed.") + "</p>" +
       fileNote +

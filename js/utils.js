@@ -1258,7 +1258,7 @@
       var cfg = getSiteConfig();
       var brandTitle = cfg.siteName + (cfg.tagline ? " — " + cfg.tagline : "");
       var brandDesc = cfg.metaDescription || DEFAULT_SITE_CONFIG.metaDescription;
-      var brandLogo = cfg.logoUrl || "assets/icons/logo.svg";
+      var brandLogo = cfg.faviconUrl || "assets/icons/favicon.svg";
       return (
         '<a href="' + escapeHtml(primary.url) + '" class="link-preview-card link-preview-web" data-og-hydrated="1">' +
         '<div class="link-preview-og-img"><img src="assets/images/og-banner.png" alt="' + escapeHtml(brandTitle) + '" loading="lazy" onerror="this.src=\'assets/images/og-banner.svg\';" /></div>' +

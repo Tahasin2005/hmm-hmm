@@ -79,11 +79,25 @@
   <body>
     <div id="app-root">
       <div class="loading-screen">
-        <img src="assets/icons/logo.svg" alt="KLORIX" data-site-logo style="width:48px;height:48px;border-radius:12px;object-fit:cover;" />
+        <img src="assets/icons/logo.svg" alt="KLORIX" class="loading-logo-full" data-site-logo />
         <div class="spinner"></div>
-        <p class="text-muted" style="font-size:14px;">Loading <span data-site-name>KLORIX</span>...</p>
+        <p class="text-muted" style="font-size:14px;">Loading...</p>
       </div>
     </div>
+    <script>
+      (function () {
+        try {
+          var raw = localStorage.getItem("hmm_site_config_cache");
+          if (raw) {
+            var cfg = JSON.parse(raw);
+            if (cfg && cfg.logoUrl) {
+              var img = document.querySelector("#app-root [data-site-logo]");
+              if (img) img.src = cfg.logoUrl;
+            }
+          }
+        } catch (e) {}
+      })();
+    </script>
 
     <!-- Official Firebase Web SDK v11.6.1 Compat CDN (works directly on file://, Vercel, and cPanel) -->
     <script src="https://www.gstatic.com/firebasejs/11.6.1/firebase-app-compat.js"></script>

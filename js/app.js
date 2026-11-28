@@ -324,10 +324,9 @@
 
     root.innerHTML =
       '<div class="gate-page"><div class="gate-card">' +
-      '<div style="display:flex;align-items:center;gap:10px;margin-bottom:16px;">' +
-      '<img src="' + U.escapeHtml(cfg.logoUrl) + '" alt="' + U.escapeHtml(cfg.siteName) + '" data-site-logo style="width:40px;height:40px;border-radius:10px;object-fit:cover;" />' +
-      '<div><div class="brand-name" data-site-name>' + U.escapeHtml(cfg.siteName) + '</div>' +
-      '<div class="brand-tagline" data-site-tagline>' + U.escapeHtml(cfg.tagline) + "</div></div></div>" +
+      '<div class="auth-gate-brand">' +
+      '<img src="' + U.escapeHtml(cfg.logoUrl) + '" alt="' + U.escapeHtml(cfg.siteName) + '" class="auth-gate-logo" data-site-logo />' +
+      "</div>" +
       "<h2>Complete your profile</h2>" +
       '<p class="text-muted" style="margin-top:6px;margin-bottom:18px;font-size:14px;">Choose your unique @username so friends can find and connect with you.</p>' +
       '<div id="onboard-error" class="alert alert-danger hidden" style="margin-bottom:14px;"></div>' +

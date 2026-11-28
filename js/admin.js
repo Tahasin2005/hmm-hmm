@@ -812,7 +812,7 @@
       document.getElementById("sc-logo-file").addEventListener("change", async function (e) {
         if (!e.target.files || !e.target.files[0]) return;
         try {
-          uploadedLogo = await U.compressImageFileToDataUrl(e.target.files[0], 256, 0.88);
+          uploadedLogo = await U.compressImageFileToDataUrl(e.target.files[0], 512, 0.9);
           logoUrlInp.value = uploadedLogo;
           logoPreview.src = uploadedLogo;
           U.showToast("Logo ready! Click Save & Apply Globally.", "success");
